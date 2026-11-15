@@ -28,6 +28,9 @@ if [ -x backend/.venv/bin/python ]; then
   (cd backend && .venv/bin/python -m pytest -q)
 fi
 
+# Never ship developer bytecode caches inside the package.
+find backend/app -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
+
 echo "Preparing offline Python wheelhouse..."
 packaging/make-wheelhouse.sh
 
