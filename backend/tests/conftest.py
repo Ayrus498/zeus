@@ -8,6 +8,12 @@ from app.terminal.runner import Runner
 from app.tools.engine import ToolContext, ToolEngine
 
 
+@pytest.fixture(autouse=True)
+def _isolated_zeus_home(tmp_path_factory, monkeypatch):
+    """Never let tests touch the real ~/.zeus."""
+    monkeypatch.setenv("ZEUS_HOME", str(tmp_path_factory.mktemp("zeushome")))
+
+
 @pytest.fixture
 def ws_dir(tmp_path):
     d = tmp_path / "proj"

@@ -2,10 +2,10 @@ import { create } from "zustand";
 import { api, type PermInfo, type Settings } from "../services/api";
 import { Socket } from "../services/socket";
 import type {
-  ChangeEntry, Mode, ModelInfo, ModelMeta, OllamaStatus, PermissionRequest, Policy, Project, Session, TimelineItem, Usage,
+  ChangeEntry, Mode, ModelInfo, ModelMeta, OllamaStatus, PermissionRequest, Policy, Project, Session, TimelineItem, Usage, Overview, Toast,
 } from "../services/types";
 
-export type RightTab = "files" | "changes" | "terminal" | "usage";
+export type RightTab = "files" | "changes" | "terminal" | "usage" | "models";
 export interface OpenFile { path: string; mode: "file" | "diff" }
 
 interface State {
@@ -14,9 +14,13 @@ interface State {
   models: ModelInfo[]; modelMeta: ModelMeta | null;
   projects: Project[]; project: Project | null; sessions: Session[]; session: Session | null; allSessions: Record<number, Session[]>;
   perms: PermInfo | null;
-  timeline: TimelineItem[]; running: boolean; modelState: "idle" | "loading" | "ready";
+  timeline: TimelineItem[]; running: boolean; modelState: "idle" | "loading" | "ready"; activeModel: string | null;
   pending: PermissionRequest[]; usage: Usage | null;
   changes: ChangeEntry[]; treeVersion: number; openFile: OpenFile | null; rightTab: RightTab; settingsOpen: boolean;
+  overview: Overview | null; toasts: Toast[];
+  refreshOverview(): Promise<void>; pullModel(name: string): Promise<void>; cancelDownload(id: number): Promise<void>;
+  dismissDownload(id: number): Promise<void>; unloadModel(name: string): Promise<void>;
+  toast(text: string, level?: Toast["level"]): void; dismissToast(id: number): void;
   init(): Promise<void>; refreshOllama(): Promise<void>; refreshModels(): Promise<void>;
   selectProject(id: number): Promise<void>; addProjectFromPicker(): Promise<void>; addProjectPath(p: string): Promise<void>;
   createProject(parent: string, name: string): Promise<void>; removeProject(id: number): Promise<void>;
@@ -30,6 +34,7 @@ interface State {
 
 let sock: Socket | null = null;
 let seq = 0;
+let toastSeq = 0;
 let started = false;
 
 export function timelineFromMessages(msgs: Awaited<ReturnType<typeof api.messages>>): TimelineItem[] {
@@ -64,6 +69,9 @@ export const useApp = create<State>((set, get) => {
     switch (ev.type) {
       case "state": set({ running: ev.running, pending: ev.pending.map((p: PermissionRequest) => ({ ...p, session_id: ev.session_id })) }); break;
       case "run_start": set({ running: true }); break;
+      case "model_selected":
+        set((st) => ({ activeModel: ev.model, session: st.session ? { ...st.session, last_model: ev.model } : st.session,
+          timeline: [...st.timeline, { kind: "route", model: ev.model, role: ev.role, reason: ev.reason, previous: ev.previous, tools: ev.tools }] })); break;
       case "model_loading": set({ modelState: "loading" }); break;
       case "model_ready": set({ modelState: "ready" }); break;
       case "token":
@@ -106,20 +114,53 @@ export const useApp = create<State>((set, get) => {
 
   async function loadSession(sess: Session | null) {
     sock?.close(); sock = null;
-    set({ session: sess, timeline: [], pending: [], running: false, usage: null, modelState: "idle" });
+    set({ session: sess, timeline: [], pending: [], running: false, usage: null, modelState: "idle", activeModel: sess?.last_model ?? null });
     if (!sess) return;
     const msgs = await api.messages(sess.id);
     set({ timeline: timelineFromMessages(msgs) });
     sock = new Socket(`/ws/sessions/${sess.id}`, handle);
-    if (sess.model) void api.modelInfo(sess.model, sess.num_ctx ?? undefined).then((m) => set({ modelMeta: m })).catch(() => set({ modelMeta: null }));
+    if (sess.model && sess.model !== "auto") void api.modelInfo(sess.model, sess.num_ctx ?? undefined).then((m) => set({ modelMeta: m })).catch(() => set({ modelMeta: null }));
   }
 
   return {
     backendUp: false, error: null, ollama: null, settings: null, models: [], modelMeta: null,
     projects: [], project: null, sessions: [], session: null, allSessions: {}, perms: null,
-    timeline: [], running: false, modelState: "idle", pending: [], usage: null,
+    timeline: [], running: false, modelState: "idle", activeModel: null, pending: [], usage: null,
     changes: [], treeVersion: 0, openFile: null, rightTab: "files", settingsOpen: false,
 
+    overview: null, toasts: [],
+    toast(text, level = "info") {
+      const id = ++toastSeq;
+      set((s) => ({ toasts: [...s.toasts, { id, level, text }].slice(-4) }));
+      if (level !== "error") setTimeout(() => get().dismissToast(id), 6000);   // errors stay until dismissed
+    },
+    dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+    async refreshOverview() {
+      let o: Overview;
+      try { o = await api.overview(); } catch { return; }
+      const prev = new Map((get().overview?.downloads ?? []).map((d) => [d.id, d.status]));
+      set({ overview: o });
+      for (const d of o.downloads) {
+        const was = prev.get(d.id);
+        if (!was || was === d.status) continue;
+        if (d.status === "completed") { get().toast(`${d.model} downloaded.`, "success"); void get().refreshModels(); }
+        else if (d.status === "failed") get().toast(`Download of ${d.model} failed: ${d.error ?? "unknown error"}`, "error");
+      }
+    },
+    async pullModel(name) {
+      try { await api.pullModel(name); } catch (e) { get().toast(`Could not start download of ${name}: ${e instanceof Error ? e.message : e}`, "error"); }
+      await get().refreshOverview();
+    },
+    async cancelDownload(id) {
+      try { await api.cancelDownload(id); } catch (e) { get().toast(`Could not cancel: ${e instanceof Error ? e.message : e}`, "error"); }
+      await get().refreshOverview();
+    },
+    async dismissDownload(id) { try { await api.dismissDownload(id); } catch { /* already gone */ } await get().refreshOverview(); },
+    async unloadModel(name) {
+      try { await api.unloadModel(name); get().toast(`${name} unloaded from memory.`, "success"); }
+      catch (e) { get().toast(e instanceof Error ? e.message : String(e), "error"); }
+      await get().refreshOverview();
+    },
     notify: (text, level = "info") => set((s) => ({ timeline: [...s.timeline, { kind: "notice", level, text }] })),
     bump: () => set((s) => ({ treeVersion: s.treeVersion + 1 })),
     setOpenFile: (openFile) => set({ openFile }),
@@ -186,6 +227,7 @@ export const useApp = create<State>((set, get) => {
       const s = await api.patchSession(sess.id, { model: name });
       await api.saveSettings({ default_model: name });
       set((st) => ({ session: s, sessions: st.sessions.map((x) => (x.id === s.id ? s : x)) }));
+      if (name === "auto") { set({ modelMeta: null }); return; }        // Auto resolves a real model per prompt
       try { set({ modelMeta: await api.modelInfo(name, s.num_ctx ?? undefined) }); } catch (e) { set({ modelMeta: null }); get().notify(String(e instanceof Error ? e.message : e), "error"); }
     },
     async setCtx(n) {
@@ -193,7 +235,7 @@ export const useApp = create<State>((set, get) => {
       const s = await api.patchSession(sess.id, { num_ctx: n });
       await api.saveSettings({ default_num_ctx: n });
       set((st) => ({ session: s, sessions: st.sessions.map((x) => (x.id === s.id ? s : x)) }));
-      if (s.model) try { set({ modelMeta: await api.modelInfo(s.model, n) }); } catch { /* keep old */ }
+      if (s.model && s.model !== "auto") try { set({ modelMeta: await api.modelInfo(s.model, n) }); } catch { /* keep old */ }
     },
 
     sendPrompt(text) {

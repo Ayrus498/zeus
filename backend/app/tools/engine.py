@@ -92,6 +92,15 @@ class ToolContext:
     request: Requester | None
 
 
+def _resolve_write(root, path):
+    """Like resolve_in_workspace, but the agent may not modify ZEUS's own data folder (.zeus/)."""
+    p = resolve_in_workspace(root, path)
+    rel = p.relative_to(Path(root).resolve())
+    if rel.parts and rel.parts[0] == ".zeus":
+        raise PathViolation("the .zeus folder is ZEUS's own data (session history) and cannot be modified by the agent")
+    return p
+
+
 class ToolEngine:
     """Stateless executor; all state lives in ToolContext."""
 
@@ -183,7 +192,7 @@ class ToolEngine:
     # ---- mutating tools
     async def t_create_file(self, ctx, path, content, reason=""):
         root = self._root(ctx)
-        p = resolve_in_workspace(root, path)
+        p = _resolve_write(root, path)
         rel = str(p.relative_to(root.resolve()))
         if p.exists():
             return {"ok": False, "output": f"{rel} already exists. Use edit_file to modify it (never overwritten silently)."}
@@ -194,7 +203,7 @@ class ToolEngine:
         if not d.allowed:
             return {"ok": False, "output": f"Permission denied: {d.why}. File was NOT created."}
         # Re-validate right before the write (TOCTOU: path may have changed during approval)
-        p = resolve_in_workspace(root, path)
+        p = _resolve_write(root, path)
         if p.exists():
             return {"ok": False, "output": f"{rel} appeared during approval; not overwritten."}
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -205,7 +214,7 @@ class ToolEngine:
 
     async def t_edit_file(self, ctx, path, old_str, new_str, reason=""):
         root = self._root(ctx)
-        p = resolve_in_workspace(root, path)
+        p = _resolve_write(root, path)
         rel = str(p.relative_to(root.resolve()))
         if not p.is_file():
             return {"ok": False, "output": f"File not found: {rel}. Use create_file for new files."}
@@ -220,7 +229,7 @@ class ToolEngine:
         d = await self._authorize(ctx, op)
         if not d.allowed:
             return {"ok": False, "output": f"Permission denied: {d.why}. File was NOT modified."}
-        p = resolve_in_workspace(root, path)
+        p = _resolve_write(root, path)
         if p.read_text() != before:
             return {"ok": False, "output": "File changed during approval; re-read and retry."}
         p.write_text(after)
@@ -230,7 +239,7 @@ class ToolEngine:
 
     async def t_delete_file(self, ctx, path, reason=""):
         root = self._root(ctx)
-        p = resolve_in_workspace(root, path)
+        p = _resolve_write(root, path)
         rel = str(p.relative_to(root.resolve()))
         if not p.is_file():
             return {"ok": False, "output": f"File not found (only files can be deleted): {rel}"}
@@ -239,7 +248,7 @@ class ToolEngine:
         d = await self._authorize(ctx, op)
         if not d.allowed:
             return {"ok": False, "output": f"Permission denied: {d.why}. File was NOT deleted."}
-        p = resolve_in_workspace(root, path)
+        p = _resolve_write(root, path)
         p.unlink()
         self._record_change(ctx, rel, "delete", before, None)
         await ctx.emit({"type": "file_change", "op": "delete", "path": rel})

@@ -1,4 +1,4 @@
-import type { ChangeEntry, Execution, ModelInfo, ModelMeta, OllamaStatus, Project, Session, TreeNode, Mode, Policy, Metrics } from "./types";
+import type { ChangeEntry, Execution, ModelInfo, ModelMeta, OllamaStatus, Project, Session, TreeNode, Mode, Policy, Metrics, Catalog, DownloadRow, Overview, AutoPlan, AutoPreview } from "./types";
 
 export const API = (import.meta.env.VITE_ZEUS_API as string | undefined) ?? "http://127.0.0.1:8765";
 export const WS = API.replace(/^http/, "ws");
@@ -23,6 +23,16 @@ export const api = {
   settings: () => req<Settings>("/api/settings"),
   saveSettings: (s: Partial<Settings>) => req<Settings>("/api/settings", "PUT", s),
   ollama: () => req<OllamaStatus>("/api/ollama/status"),
+  autoPlan: () => req<AutoPlan>("/api/auto/plan"),
+  autoPreview: (prompt: string, last_model?: string | null) => req<AutoPreview>("/api/auto/preview", "POST", { prompt, last_model }),
+  autoPins: (b: { code?: string; think?: string; clear?: string[] }) => req<{ code: string | null; think: string | null }>("/api/auto/pins", "PUT", b),
+  catalog: () => req<Catalog>("/api/ollama/catalog"),
+  overview: () => req<Overview>("/api/ollama/overview"),
+  pullModel: (model: string) => req<DownloadRow>("/api/ollama/pull", "POST", { model }),
+  cancelDownload: (id: number) => req<{ ok: boolean }>(`/api/ollama/downloads/${id}/cancel`, "POST"),
+  dismissDownload: (id: number) => req<{ ok: boolean }>(`/api/ollama/downloads/${id}`, "DELETE"),
+  unloadModel: (model: string) => req<{ ok: boolean }>("/api/ollama/unload", "POST", { model }),
+  openUrl: (url: string) => req<{ ok: boolean }>("/api/open-url", "POST", { url }),
   metrics: () => req<Metrics>("/api/metrics"),
   models: () => req<ModelInfo[]>("/api/models"),
   modelInfo: (name: string, num_ctx?: number) => req<ModelMeta>("/api/models/info" + q({ name, num_ctx })),

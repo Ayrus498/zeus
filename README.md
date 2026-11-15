@@ -13,7 +13,10 @@ your folder, and every write or command passes through a permission engine you c
 - **Any local Ollama model**: models are discovered dynamically (nothing hard-coded); choose context size (8K / 16K / 32K / 64K / model max) with a memory warning.
 - **Tool-using agent**: `list_files`, `read_file`, `search_files`, `create_file`, `edit_file`, `delete_file`, `run_command`, `git_status`, `git_diff`. Works with native tool calls and falls back to parsing JSON / `<function=...>` tool calls printed as text by weaker models.
 - **Backend-enforced permissions**: read-only / approval / trusted / custom, inline approval cards in the conversation (diffs and the exact command, Approve Once / Approve for Session / Reject), path and symlink validation.
+- **Auto model mode**: choose "✨ Auto" in the model dropdown and ZEUS picks a coding or a reasoning model for each prompt from the models you have installed (using what it knows about each model, your GPU/RAM and what is already loaded). The pick is explained in the chat; pin your own choice per role in the Models tab, or start a prompt with `/think` or `/code` to force one.
+- **Models tab (model guide)**: a curated guide to ~30 well-known Ollama models (what each is best for, how well it suits the ZEUS agent, approximate sizes, whether it fits your GPU/RAM) with **Download** and **Unload** buttons, live download progress, persisted download history and in-page error messages. If Ollama is missing, it shows an install/start guide with links.
 - **Live Usage tab**: `ollama ps` (loaded models, GPU/CPU split, keep-alive), GPU utilization / VRAM (NVIDIA, AMD), Ollama and system CPU/RAM, with interactive hover charts, plus real token counts from Ollama.
+- **Session memory in `.zeus/` folders**: every conversation (the context sent to Ollama) is mirrored to `<project>/.zeus/sessions/` and settings to `~/.zeus/settings.json`, and reloaded automatically when ZEUS or the project is opened (even after the internal database is lost). See [Where your data lives](#where-your-data-lives).
 - **Persistent sessions** in SQLite, copy buttons on code blocks, streaming terminal with cancel and timeout.
 - **Offline install**: the `.deb` bundles its Python dependencies; installing needs no network.
 
@@ -70,6 +73,20 @@ Ollama and models are not bundled. Install them separately.
 zeus                       # or launch "zeus" from the application menu (it starts its own backend on 127.0.0.1:8765)
 sudo apt remove zeus       # your data stays in ~/.local/share/zeus (delete it to remove sessions/history)
 ```
+
+## Where your data lives
+
+| Location | Contents |
+|---|---|
+| `<project>/.zeus/sessions/<id>.json` | One file per conversation: messages, tool calls, model, context size, token counts |
+| `<project>/.zeus/project.json`, `README.md`, `.gitignore` | Project info; `.gitignore` contains `*` so history is **never committed** by accident |
+| `~/.zeus/settings.json` | Ollama endpoint, default model/context, the list of known projects |
+| `~/.local/share/zeus/zeus.db` | Live SQLite store (fast queries); the `.zeus` files are the durable copy it is rebuilt from |
+
+On startup ZEUS restores any projects, settings and sessions that the database lacks; adding or opening a project
+restores its `.zeus/sessions`. Removing a project from ZEUS (or a lost database) never deletes `.zeus/`; deleting a session does remove its file.
+Delete a project's `.zeus/` folder to forget its history. Safety: **permissions are never read from `.zeus/`** (a cloned repo cannot pre-grant
+itself "trusted" mode), imported sessions are schema-validated and size-limited, and the agent's file tools cannot write to `.zeus/`.
 
 ## Permissions
 

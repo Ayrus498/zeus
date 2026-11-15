@@ -15,7 +15,7 @@ export function PromptInput() {
         <textarea
           value={text} onChange={(e) => setText(e.target.value)} rows={3} aria-label="Prompt"
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
-          placeholder={!project ? "Open a project to begin" : noModel ? "Select a model to begin" : !ollama?.connected ? "Ollama is not connected" : "Ask ZEUS to build, modify or explain code…  (Enter to send, Shift+Enter for newline)"}
+          placeholder={!project ? "Open a project to begin" : noModel ? "Select a model to begin" : !ollama?.connected ? "Ollama is not connected" : `Ask ZEUS to build, modify or explain code…  (Enter to send, Shift+Enter for newline${session?.model === "auto" ? "; /think or /code forces a model" : ""})`}
           disabled={disabled && !running}
           className="w-full resize-none bg-transparent px-2 py-1 outline-none placeholder:text-muted" />
         <div className="flex items-center justify-end">

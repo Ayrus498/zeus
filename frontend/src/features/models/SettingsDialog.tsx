@@ -22,6 +22,11 @@ export function SettingsDialog() {
           <div className="mt-1 text-xs">{ollama?.connected ? <span className="text-ok">Connected · Ollama {ollama.version}</span> : <span className="text-danger">Not connected{ollama?.error ? ` – ${ollama.error}` : ""}</span>}
             {msg && <span className="ml-2 text-muted">{msg}</span>}</div>
         </div>
+        <div className="rounded-md border border-border bg-surface-2/50 p-3 text-xs" data-testid="storage-info">
+          <div className="mb-1 font-medium">Where ZEUS keeps your data</div>
+          <div className="text-muted">Conversation history (the context sent to Ollama) is saved in each project's <span className="font-mono text-foreground">.zeus/</span> folder, and settings in <span className="font-mono text-foreground">{settings?.home ?? "~"}/.zeus/</span>.
+            They are reloaded automatically when ZEUS or the project is opened, even if its internal database is lost. The project's <span className="font-mono">.zeus/</span> is git-ignored by default.</div>
+        </div>
         <div>
           <div className="mb-1 text-xs text-muted">Installed models ({models.length})</div>
           <div className="max-h-48 overflow-auto rounded-md border border-border">

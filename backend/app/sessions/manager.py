@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import uuid
 
 from ..database.db import Database, now
 
@@ -7,12 +8,18 @@ from ..database.db import Database, now
 class SessionManager:
     def __init__(self, db: Database):
         self.db = db
+        self.files = None   # optional ZeusFiles mirror, set by the app
 
     def create(self, project_id: int, title: str = "New session", model: str | None = None, num_ctx: int | None = None) -> dict:
         t = now()
-        sid = self.db.x("INSERT INTO sessions(project_id,title,model,num_ctx,created,updated) VALUES(?,?,?,?,?,?)",
-                        (project_id, title, model, num_ctx, t, t))
+        sid = self.db.x("INSERT INTO sessions(project_id,title,model,num_ctx,created,updated,uid) VALUES(?,?,?,?,?,?,?)",
+                        (project_id, title, model, num_ctx, t, t, uuid.uuid4().hex))
+        self._changed(sid)
         return self.get(sid)
+
+    def _changed(self, sid: int):
+        if self.files:
+            self.files.schedule(sid)
 
     def get(self, sid: int) -> dict | None:
         return self.db.one("SELECT * FROM sessions WHERE id=?", (sid,))
@@ -26,9 +33,12 @@ class SessionManager:
         allowed = {k: v for k, v in fields.items() if k in ("title", "model", "num_ctx") and v is not None}
         for k, v in allowed.items():
             self.db.x(f"UPDATE sessions SET {k}=? WHERE id=?", (v, sid))
+        self._changed(sid)
         return self.get(sid)
 
     def delete(self, sid: int):
+        if self.files:
+            self.files.remove_session(sid)
         self.db.x("DELETE FROM sessions WHERE id=?", (sid,))
 
     def messages(self, sid: int) -> list[dict]:

@@ -90,7 +90,13 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
         if (it.kind === "user") return <div key={i} className="ml-auto w-fit max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-surface-2 px-4 py-2.5">{it.text}</div>;
         if (it.kind === "assistant") return (
           <div key={i}><div className="mb-0.5 text-[11px] font-medium uppercase tracking-wide text-accent">ZEUS</div>
-            <Markdown text={it.text} />{it.streaming && <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-middle" />}</div>);
+            <Markdown text={it.text} /></div>);
+        if (it.kind === "route") return (
+          <div key={i} className="flex items-start gap-1.5 text-[11px] text-muted" title={it.reason} data-testid="route-note">
+            <Zap size={12} className="mt-0.5 shrink-0 text-accent" />
+            <span>Auto picked <span className="font-mono text-foreground">{it.model}</span> for {it.role === "think" ? "reasoning" : it.role === "code" ? "coding" : "this follow-up"}
+              {it.previous && it.previous !== it.model ? <> (switching from <span className="font-mono">{it.previous}</span>; loading may take a few seconds)</> : null}
+              {!it.tools ? " · no tools this turn (reasoning-only model)" : ""}</span></div>);
         if (it.kind === "tool") return <ToolCard key={i} item={it} />;
         if (it.kind === "command") return <CommandCard key={i} item={it} />;
         return <div key={i} className={cn("flex items-start gap-2 rounded-md px-3 py-2 text-xs", it.level === "error" ? "bg-danger/15 text-danger" : "bg-surface text-muted")}>

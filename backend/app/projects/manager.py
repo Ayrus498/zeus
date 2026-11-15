@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ..database.db import Database, now
 
-IGNORE = {".git", "node_modules", "__pycache__", ".venv", "venv", ".pytest_cache", ".mypy_cache",
+IGNORE = {".zeus", ".git", "node_modules", "__pycache__", ".venv", "venv", ".pytest_cache", ".mypy_cache",
           "target", "dist", "build", ".idea", ".next", ".cache"}
 
 

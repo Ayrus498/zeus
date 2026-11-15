@@ -1,7 +1,7 @@
 export type Mode = "read_only" | "approval" | "trusted" | "custom";
 export type Policy = "allow" | "ask" | "deny";
 export interface Project { id: number; name: string; path: string; last_opened: number; permission_mode: Mode; custom_permissions: string; exists?: boolean; readable?: boolean; writable?: boolean; is_git?: boolean }
-export interface Session { id: number; project_id: number; title: string; model: string | null; num_ctx: number | null; created: number; updated: number; input_tokens: number; output_tokens: number }
+export interface Session { id: number; project_id: number; title: string; model: string | null; num_ctx: number | null; created: number; updated: number; input_tokens: number; output_tokens: number; last_model?: string | null }
 export interface ModelInfo { name: string; size: number; family?: string; parameter_size?: string; quantization?: string }
 export interface ModelMeta { name: string; context_length: number | null; size: number; tools_supported: boolean | null; capabilities: string[];
   context_check?: { warning: string | null; kv_bytes: number | null; needed_bytes?: number; estimate: boolean } }
@@ -17,6 +17,7 @@ export type TimelineItem =
   | { kind: "assistant"; agent: string; text: string; streaming?: boolean }
   | { kind: "tool"; id: string; name: string; args: Record<string, unknown>; result?: string; ok?: boolean }
   | { kind: "command"; runId: string; command: string; output: string; status: "running" | "completed" | "timeout" | "cancelled"; exitCode?: number | null }
+  | { kind: "route"; model: string; role: string; reason: string; previous?: string | null; tools: boolean }
   | { kind: "notice"; level: "info" | "error"; text: string };
 
 export interface GpuSample { vendor: string; index: number | null; name: string; util_pct: number | null; mem_util_pct: number | null; mem_used: number | null; mem_total: number | null; temp_c: number | null; power_w: number | null }
@@ -29,3 +30,29 @@ export interface Metrics {
   gpus: GpuSample[];
   ollama: { connected: boolean; version?: string; loaded: LoadedModel[] };
 }
+
+export interface CatalogTag { tag: string; size_gb: number; latest: boolean }
+export type Fit = "best" | "good" | "limited" | "no";
+export interface CatalogModel {
+  name: string; title: string; maker: string; description: string; best_for: string; purposes: string[]; capabilities: string[];
+  fit: Fit; context: string | null; note: string | null; url: string; tags: CatalogTag[];
+}
+export interface Catalog { purposes: Record<string, string>; library_url: string; models: CatalogModel[]; note: string }
+export interface DownloadRow {
+  id: number; model: string; status: "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted"; detail: string;
+  completed: number; total: number; percent: number | null; error: string | null; started: number; updated: number;
+}
+export interface Overview {
+  connected: boolean; version?: string; endpoint: string; error?: string;
+  installed: ModelInfo[]; loaded: LoadedModel[]; downloads: DownloadRow[];
+  hardware: { gpu: { total: number; free: number; name: string } | null; ram_total: number | null; ram_available: number | null };
+}
+export interface Toast { id: number; level: "info" | "error" | "success"; text: string }
+
+export interface AutoRole { name: string; title: string; fit: Fit; capabilities: string[]; size: number; loaded: boolean; purposes: string[]; why: string[]; tools: boolean }
+export interface AutoPlan {
+  chat_models: number; candidates: string[]; pins: { code: string | null; think: string | null };
+  roles: { code: AutoRole | null; think: AutoRole | null };
+  warnings: string[]; suggestions: Array<{ role: "code" | "think"; tag: string; size_gb: number | null; why: string }>;
+}
+export interface AutoPreview { intent: "code" | "think" | "keep"; choice: { model: string; role: string; tools: boolean; reason: string } | null }

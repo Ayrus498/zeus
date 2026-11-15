@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
+import shutil
 import subprocess
 import uuid
 from pathlib import Path
@@ -18,7 +20,11 @@ from ..permissions.manager import (ACTIONS, DEFAULT_POLICY, MODES, PathViolation
                                    parse_custom, resolve_in_workspace)
 from ..projects.manager import ProjectError, ProjectManager
 from .. import metrics
-from ..providers.ollama import OllamaError, OllamaProvider, context_warning
+from ..agent.router import AUTO, AutoRouter, classify, decide
+from ..persistence.zeusdir import ZeusFiles
+from ..providers import catalog as model_catalog
+from ..providers.downloads import DownloadManager
+from ..providers.ollama import OllamaError, OllamaProvider, context_warning, system_memory
 from ..sessions.manager import SessionManager
 from ..sessions.runtime import SessionRuntime
 from ..terminal.runner import Runner
@@ -47,6 +53,25 @@ class SessionPatch(BaseModel):
     model: str | None = None
     num_ctx: int | None = None
 
+class ModelReq(BaseModel):
+    model: str
+
+
+class UrlReq(BaseModel):
+    url: str
+
+
+class PinsUpdate(BaseModel):
+    code: str | None = None
+    think: str | None = None
+    clear: list[str] = []
+
+
+class PreviewReq(BaseModel):
+    prompt: str
+    last_model: str | None = None
+
+
 class SettingsUpdate(BaseModel):
     ollama_url: str | None = None
     default_model: str | None = None
@@ -59,10 +84,24 @@ def create_app(db_path=None) -> FastAPI:
     db = Database(db_path or config.DB_PATH)
     projects, sessions = ProjectManager(db), SessionManager(db)
     runner, tools = Runner(), ToolEngine()
+    downloads = DownloadManager(db)
+    zfiles = ZeusFiles(db)
+    restored = zfiles.restore_home()          # settings / projects / sessions found in ~/.zeus and <project>/.zeus
+    sessions.files = zfiles
+    db.on_recreated = zfiles.restore_home
     state = {"provider": OllamaProvider(db.get_setting("ollama_url", config.DEFAULT_OLLAMA))}
     runtimes: dict[int, SessionRuntime] = {}
     agent = AgentEngine(db, state["provider"], tools)
-    app.state.db, app.state.runtimes, app.state.projects = db, runtimes, projects
+    agent.on_change = zfiles.schedule
+    auto = AutoRouter(db, lambda: state["provider"])
+    agent.router = auto
+    app.state.db, app.state.runtimes, app.state.projects, app.state.zfiles = db, runtimes, projects, zfiles
+    zfiles.write_home()
+
+    @app.on_event("shutdown")
+    def _flush_zeus_files():
+        zfiles.flush()
+        zfiles.write_home()
 
     def provider() -> OllamaProvider:
         return state["provider"]
@@ -108,6 +147,7 @@ def create_app(db_path=None) -> FastAPI:
             db.set_setting("default_model", s.default_model)
         if s.default_num_ctx:
             db.set_setting("default_num_ctx", str(s.default_num_ctx))
+        zfiles.write_home()
         return await get_settings()
 
     @app.get("/api/ollama/status")
@@ -115,6 +155,111 @@ def create_app(db_path=None) -> FastAPI:
         st = await provider().status()
         st["loaded"] = [m.get("name") for m in await provider().running()] if st["connected"] else []
         return st
+
+    # ---------- model library: catalog, overview, download / unload
+    MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-/:@]{0,198}$")
+    OPEN_OK = re.compile(r"https://(?:(?:www\.|docs\.)?ollama\.com|github\.com/ollama)(?:[/?#][^\s]*)?")
+
+    def valid_model(name: str) -> str:
+        name = (name or "").strip()
+        if not MODEL_RE.match(name):
+            raise HTTPException(400, f"invalid model name: {name!r}")
+        return name
+
+    @app.get("/api/ollama/catalog")
+    async def ollama_catalog():
+        return {"purposes": model_catalog.PURPOSES, "library_url": model_catalog.LIBRARY_URL, "models": model_catalog.CATALOG,
+                "note": "Curated snapshot. Sizes are approximate; see each model's page on ollama.com for the latest tags."}
+
+    @app.get("/api/ollama/overview")
+    async def ollama_overview():
+        """One cheap call the Models panel polls: connection, installed + loaded models, downloads, hardware."""
+        st = await provider().status()
+        loop = asyncio.get_running_loop()
+        mem = await loop.run_in_executor(None, system_memory)
+        mi = metrics._meminfo()
+        out = {**st, "installed": [], "loaded": [], "downloads": downloads.list(),
+               "hardware": {"gpu": mem["gpu"], "ram_total": mi.get("MemTotal"), "ram_available": mem["ram_available"]}}
+        if st["connected"]:
+            try:
+                out["installed"] = await provider().list_models()
+            except OllamaError:
+                pass
+            out["loaded"] = metrics.describe_ps(await provider().running())
+        return out
+
+    @app.post("/api/ollama/pull")
+    async def ollama_pull(b: ModelReq):
+        name = valid_model(b.model)
+        st = await provider().status()
+        if not st["connected"]:
+            raise HTTPException(503, f"Ollama is not reachable at {st['endpoint']}. Start it with `ollama serve`.")
+        return downloads.start(provider(), name)
+
+    @app.post("/api/ollama/downloads/{did}/cancel")
+    async def ollama_cancel(did: int):
+        if not await downloads.cancel(did):
+            raise HTTPException(404, "no running download with that id")
+        return {"ok": True}
+
+    @app.delete("/api/ollama/downloads/{did}")
+    async def ollama_dismiss(did: int):
+        downloads.dismiss(did)
+        return {"ok": True}
+
+    @app.post("/api/ollama/unload")
+    async def ollama_unload(b: ModelReq):
+        name = valid_model(b.model)
+        try:
+            await provider().unload(name)
+        except OllamaError as e:
+            raise HTTPException(502, f"Could not unload {name}: {e}")
+        return {"ok": True}
+
+    @app.get("/api/auto/plan")
+    async def auto_plan():
+        """What Auto mode would use for coding vs thinking right now, with warnings and download suggestions."""
+        try:
+            return await auto.plan()
+        except OllamaError as e:
+            raise HTTPException(503, str(e))
+
+    @app.post("/api/auto/preview")
+    async def auto_preview(b: PreviewReq):
+        """Dry run: which model would Auto pick for this prompt, and why. Nothing is loaded or changed."""
+        try:
+            profiles, gpu, ram = await auto.gather()
+        except OllamaError as e:
+            raise HTTPException(503, str(e))
+        c = decide(b.prompt, profiles, gpu, ram, b.last_model, auto.pins())
+        i = classify(b.prompt)
+        return {"intent": i.role, "choice": None if not c else {"model": c.model, "role": c.role, "tools": c.tools, "reason": c.reason}}
+
+    @app.put("/api/auto/pins")
+    async def auto_pins(b: PinsUpdate):
+        installed = {m["name"] for m in await provider().list_models()} if (await provider().status())["connected"] else set()
+        for role in ("code", "think"):
+            v = getattr(b, role)
+            if v:
+                if v not in installed:
+                    raise HTTPException(400, f"{v} is not installed")
+                db.set_setting(f"auto_{role}_model", v)
+            elif role in b.clear:
+                db.x("DELETE FROM settings WHERE key=?", (f"auto_{role}_model",))
+        zfiles.write_home()
+        return auto.pins()
+
+    @app.post("/api/open-url")
+    async def open_url(b: UrlReq):
+        """Open an allow-listed documentation link in the user's default browser (the webview cannot open new windows)."""
+        if not OPEN_OK.fullmatch(b.url or ""):
+            raise HTTPException(400, "only Ollama documentation links can be opened from here")
+        opener = shutil.which("xdg-open") or shutil.which("gio")
+        if not opener:
+            raise HTTPException(501, "no browser opener found (install xdg-utils)")
+        cmd = [opener, b.url] if opener.endswith("xdg-open") else [opener, "open", b.url]
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        return {"ok": True}
 
     sampler = metrics.Sampler()
 
@@ -155,16 +300,21 @@ def create_app(db_path=None) -> FastAPI:
     @app.post("/api/projects")
     async def add_project(b: AddProject):
         try:
-            return projects.add(b.path)
+            p = projects.add(b.path)
         except ProjectError as e:
             raise HTTPException(400, str(e))
+        zfiles.restore_project(p)      # bring back conversations kept in <project>/.zeus
+        zfiles.write_home()
+        return p
 
     @app.post("/api/projects/create")
     async def create_project(b: CreateProject):
         try:
-            return projects.create(b.parent, b.name)
+            p = projects.create(b.parent, b.name)
         except ProjectError as e:
             raise HTTPException(400, str(e))
+        zfiles.write_home()
+        return p
 
     @app.post("/api/pick-folder")
     async def pick_folder():
@@ -182,13 +332,16 @@ def create_app(db_path=None) -> FastAPI:
     @app.delete("/api/projects/{pid}")
     async def remove_project(pid: int):
         proj_or_404(pid)
+        zfiles.flush()          # make sure the project's .zeus/ is current; it stays on disk and restores if re-added
         projects.remove(pid)   # DB rows only; files on disk are never touched
+        zfiles.write_home()
         return {"ok": True}
 
     @app.post("/api/projects/{pid}/open")
     async def open_project(pid: int):
-        proj_or_404(pid)
+        proj = proj_or_404(pid)
         projects.touch(pid)
+        zfiles.restore_project(proj)
         return projects.get(pid)
 
     @app.get("/api/projects/{pid}/tree")

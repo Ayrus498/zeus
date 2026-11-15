@@ -7,8 +7,9 @@ import { fmtBytes, fmtCtx } from "../../lib/utils";
 const PRESETS = [8192, 16384, 32768, 65536];
 
 export function ModelSelector() {
-  const { models, session, modelMeta, setModel, setCtx, ollama } = useApp();
-  const missing = !!session?.model && models.length > 0 && !models.some((m) => m.name === session.model);
+  const { models, session, modelMeta, setModel, setCtx, ollama, activeModel } = useApp();
+  const isAuto = session?.model === "auto";
+  const missing = !!session?.model && !isAuto && models.length > 0 && !models.some((m) => m.name === session.model);
   const max = modelMeta?.context_length ?? null;
   const [custom, setCustom] = useState(false);
   useEffect(() => setCustom(false), [session?.id]);
@@ -18,12 +19,17 @@ export function ModelSelector() {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Cpu size={14} className="text-accent" />
-      <Select aria-label="Model" className="min-w-[300px]" value={session?.model ?? ""} disabled={!ollama?.connected} onChange={(e) => void setModel(e.target.value)}>
+      <Select aria-label="Model" value={session?.model ?? ""} disabled={!ollama?.connected} onChange={(e) => void setModel(e.target.value)}>
         {!session?.model && <option value="">Select model…</option>}
+        <option value="auto">✨ Auto — picks a model per prompt</option>
         {missing && <option value={session!.model!}>{session!.model} (not installed)</option>}
         {models.map((m) => <option key={m.name} value={m.name}>{m.name} · {fmtBytes(m.size)}</option>)}
       </Select>
-      <Select aria-label="Context window" className="min-w-[110px]" value={isMaxSel ? "max" : String(ctx)} disabled={!session} onChange={(e) => void setCtx(e.target.value === "max" ? (max ?? ctx) : Number(e.target.value))}>
+      {isAuto && (
+        <span className="flex max-w-[260px] items-center gap-1 truncate rounded-md bg-accent/15 px-2 py-1 text-[11px] text-accent" data-testid="auto-active"
+          title="Auto mode: ZEUS picks a coding or a reasoning model for each prompt from your installed models. Type /think or /code at the start of a prompt to force one. See the Models tab for details.">
+          {activeModel ? <>now: <span className="truncate font-mono">{activeModel}</span></> : "picks per prompt"}</span>)}
+      <Select aria-label="Context window" value={isMaxSel ? "max" : String(ctx)} disabled={!session} onChange={(e) => void setCtx(e.target.value === "max" ? (max ?? ctx) : Number(e.target.value))}>
         {options.map((p) => <option key={p} value={p}>{fmtCtx(p)} ctx</option>)}
         {!options.includes(ctx) && !isMaxSel && <option value={ctx}>{ctx.toLocaleString()} ctx</option>}
         {max && <option value="max">Max supported ({fmtCtx(max)})</option>}

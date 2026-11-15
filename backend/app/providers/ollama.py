@@ -80,6 +80,49 @@ class OllamaProvider:
         except Exception:
             return []
 
+    async def pull_stream(self, model: str) -> AsyncIterator[dict]:
+        """Streams /api/pull progress objects: {status, digest?, total?, completed?} or raises OllamaError."""
+        try:
+            async with httpx.AsyncClient(base_url=self.base_url, timeout=httpx.Timeout(None, connect=10.0)) as c:
+                async with c.stream("POST", "/api/pull", json={"model": model, "stream": True}) as r:
+                    if r.status_code >= 400:
+                        body = (await r.aread()).decode("utf-8", "replace")
+                        try:
+                            body = json.loads(body).get("error", body)
+                        except Exception:
+                            pass
+                        raise OllamaError(body.strip() or f"HTTP {r.status_code}")
+                    async for line in r.aiter_lines():
+                        if not line.strip():
+                            continue
+                        try:
+                            obj = json.loads(line)
+                        except ValueError:
+                            continue
+                        if obj.get("error"):
+                            raise OllamaError(str(obj["error"]))
+                        yield obj
+        except OllamaError:
+            raise
+        except httpx.HTTPError as e:
+            raise OllamaError(f"connection to Ollama lost: {str(e) or type(e).__name__}")
+
+    async def unload(self, model: str) -> None:
+        """Ask Ollama to free the model from memory now (keep_alive=0)."""
+        try:
+            async with self._client(30.0) as c:
+                r = await c.post("/api/generate", json={"model": model, "keep_alive": 0})
+                if r.status_code >= 400:
+                    try:
+                        msg = r.json().get("error", r.text)
+                    except Exception:
+                        msg = r.text
+                    raise OllamaError(msg)
+        except OllamaError:
+            raise
+        except Exception as e:
+            raise OllamaError(f"cannot reach Ollama: {str(e) or type(e).__name__}")
+
     async def chat_stream(self, model: str, messages: list[dict], tools: list[dict] | None, num_ctx: int | None) -> AsyncIterator[dict]:
         body = {"model": model, "messages": messages, "stream": True, "options": {"temperature": 0.2}}
         if tools:

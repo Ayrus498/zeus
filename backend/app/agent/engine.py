@@ -13,6 +13,7 @@ from ..database.db import Database, now
 from ..providers.ollama import OllamaError, OllamaProvider
 from ..tools.engine import ToolContext, ToolEngine, ollama_tools
 from .prompts import SYSTEM_PROMPT
+from .router import AUTO
 from .toolparse import extract_tool_calls
 
 
@@ -26,9 +27,16 @@ class AgentEngine:
     def __init__(self, db: Database, provider: OllamaProvider, tools: ToolEngine):
         self.db, self.provider, self.tools = db, provider, tools
 
-    def _history(self, session_id: int, spec: AgentSpec, project: dict) -> list[dict]:
+    router = None      # optional AutoRouter; enables model == 'auto'
+
+    def _history(self, session_id: int, spec: AgentSpec, project: dict, no_tools: bool = False) -> list[dict]:
         rows = self.db.q("SELECT * FROM messages WHERE session_id=? ORDER BY id", (session_id,))
-        msgs = [{"role": "system", "content": spec.system_prompt.format(path=project["path"], name=project["name"])}]
+        sys_prompt = spec.system_prompt.format(path=project["path"], name=project["name"])
+        if no_tools:
+            sys_prompt += ("\n\nIMPORTANT: no tools are available for this turn. Do not call tools or print tool-call JSON; "
+                           "answer directly and thoroughly from the conversation and your own knowledge. If the user needs files "
+                           "changed or commands run, say so and suggest they ask for it (a coding model will handle it).")
+        msgs = [{"role": "system", "content": sys_prompt}]
         last_tools = {r["id"] for r in [r for r in rows if r["role"] == "tool"][-8:]}
         for r in rows:
             m = {"role": r["role"], "content": r["content"]}
@@ -41,9 +49,14 @@ class AgentEngine:
             msgs.append(m)
         return msgs
 
+    on_change = None   # optional callback(session_id): lets the app mirror the session to .zeus/
+
     def _save(self, session_id, agent, role, content, tool_calls=None, tool_name=None):
-        return self.db.x("INSERT INTO messages(session_id,agent,role,content,tool_calls,tool_name,created) VALUES(?,?,?,?,?,?,?)",
-                         (session_id, agent, role, content, json.dumps(tool_calls) if tool_calls else None, tool_name, now()))
+        mid = self.db.x("INSERT INTO messages(session_id,agent,role,content,tool_calls,tool_name,created) VALUES(?,?,?,?,?,?,?)",
+                        (session_id, agent, role, content, json.dumps(tool_calls) if tool_calls else None, tool_name, now()))
+        if self.on_change:
+            self.on_change(session_id)
+        return mid
 
     async def run(self, ctx: ToolContext, session: dict, user_text: str, spec: AgentSpec | None = None):
         spec = spec or AgentSpec()
@@ -52,14 +65,26 @@ class AgentEngine:
         self._save(sid, "user", "user", user_text)
         self.db.x("UPDATE sessions SET updated=? WHERE id=?", (now(), sid))
         await emit({"type": "run_start", "agent": spec.name})
+        model, tools_on = session["model"], True
         try:
+            if model == AUTO:
+                choice = await self.router.route(user_text, session.get("last_model")) if self.router else None
+                if not choice:
+                    await emit({"type": "error", "message": "Auto mode found no chat-capable model. Download one in the Models tab, or pick a model manually."})
+                    await emit({"type": "run_end", "status": "error"})
+                    return
+                model, tools_on = choice.model, choice.tools
+                self.db.x("UPDATE sessions SET last_model=? WHERE id=?", (model, sid))
+                await emit({"type": "model_selected", "model": model, "role": choice.role, "tools": tools_on,
+                            "reason": choice.reason, "previous": session.get("last_model")})
+                session = {**session, "last_model": model}
             recent: list[str] = []
             for step in range(MAX_AGENT_STEPS):
-                msgs = self._history(sid, spec, ctx.project)
+                msgs = self._history(sid, spec, ctx.project, no_tools=not tools_on)
                 content, native_calls, usage = "", [], None
-                await emit({"type": "model_loading", "model": session["model"]})
+                await emit({"type": "model_loading", "model": model})
                 first = True
-                async for chunk in self.provider.chat_stream(session["model"], msgs, spec.tools, session.get("num_ctx")):
+                async for chunk in self.provider.chat_stream(model, msgs, spec.tools if tools_on else None, session.get("num_ctx")):
                     if first:
                         first = False
                         await emit({"type": "model_ready"})
@@ -130,6 +155,8 @@ class AgentEngine:
         dur = (u.get("eval_duration") or 0) / 1e9
         self.db.x("UPDATE sessions SET input_tokens=input_tokens+?, output_tokens=output_tokens+? WHERE id=?", (pin, pout, session["id"]))
         row = self.db.one("SELECT input_tokens,output_tokens FROM sessions WHERE id=?", (session["id"],))
+        if self.on_change:
+            self.on_change(session["id"])
         await emit({"type": "usage", "prompt_tokens": pin, "output_tokens": pout,
                     "tokens_per_sec": round(pout / dur, 1) if dur else None,
                     "session_input": row["input_tokens"], "session_output": row["output_tokens"],
