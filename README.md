@@ -12,7 +12,7 @@ your folder, and every write or command passes through a permission engine you c
 - **Native desktop app** (Tauri 2) with a Claude-Code-Desktop-inspired UI: projects sidebar, chat timeline, Monaco file/diff viewer, terminal panel.
 - **Any local Ollama model**: models are discovered dynamically (nothing hard-coded); choose context size (8K / 16K / 32K / 64K / model max) with a memory warning.
 - **Tool-using agent**: `list_files`, `read_file`, `search_files`, `create_file`, `edit_file`, `delete_file`, `run_command`, `git_status`, `git_diff`. Works with native tool calls and falls back to parsing JSON / `<function=...>` tool calls printed as text by weaker models.
-- **Backend-enforced permissions**: read-only / approval / trusted / custom, approval dialogs with diffs and the exact command, path and symlink validation.
+- **Backend-enforced permissions**: read-only / approval / trusted / custom, inline approval cards in the conversation (diffs and the exact command, Approve Once / Approve for Session / Reject), path and symlink validation.
 - **Live Usage tab**: `ollama ps` (loaded models, GPU/CPU split, keep-alive), GPU utilization / VRAM (NVIDIA, AMD), Ollama and system CPU/RAM, with interactive hover charts, plus real token counts from Ollama.
 - **Persistent sessions** in SQLite, copy buttons on code blocks, streaming terminal with cancel and timeout.
 - **Offline install**: the `.deb` bundles its Python dependencies; installing needs no network.

@@ -93,3 +93,17 @@ def test_processor_label():
     assert processor_label(100, 100) == "100% GPU" and processor_label(100, 0) == "100% CPU"
     assert processor_label(100, 60) == "40%/60% CPU/GPU"
     assert describe_ps([{"name": "m", "size": 200, "size_vram": 50}])[0]["gpu_pct"] == 25
+
+
+def test_database_recreated_if_data_dir_deleted(tmp_path):
+    import shutil
+    from fastapi.testclient import TestClient
+    from app.api.main import create_app
+    d = tmp_path / "data"
+    c = TestClient(create_app(str(d / "zeus.db")))
+    assert c.get("/api/projects").status_code == 200
+    shutil.rmtree(d)                       # e.g. user wipes ~/.local/share/zeus while ZEUS is running
+    assert c.get("/api/projects").json() == []
+    parent = tmp_path / "ws"; parent.mkdir()
+    r = c.post("/api/projects/create", json={"parent": str(parent), "name": "demo"})
+    assert r.status_code == 200 and (parent / "demo").is_dir()

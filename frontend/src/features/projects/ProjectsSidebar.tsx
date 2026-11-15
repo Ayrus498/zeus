@@ -1,3 +1,4 @@
+import { ConfirmDialog, type ConfirmRequest } from "../../components/ui/confirm";
 import { useState } from "react";
 import { Check, FolderOpen, FolderPlus, Pencil, Plus, Settings, Trash2, Zap, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
@@ -32,6 +33,7 @@ function NewProjectDialog({ open, onClose }: { open: boolean; onClose: () => voi
 export function ProjectsSidebar() {
   const { projects, project, sessions, session, selectProject, addProjectFromPicker, removeProject, newSession, selectSession, renameSession, deleteSession, setSettingsOpen, ollama } = useApp();
   const [creating, setCreating] = useState(false);
+  const [confirmReq, setConfirmReq] = useState<ConfirmRequest | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [title, setTitle] = useState("");
   return (
@@ -50,7 +52,7 @@ export function ProjectsSidebar() {
             <button className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left" onClick={() => void selectProject(p.id)} title={p.path}>
               <span>📁</span><span className="min-w-0"><span className="block truncate text-sm">{p.name}</span>{project?.id === p.id && <span className="block truncate font-mono text-[10px] text-muted">{p.path}</span>}</span></button>
             <button title="Remove from ZEUS (files are kept)" aria-label={`Remove ${p.name}`} className="hidden cursor-pointer rounded p-1 text-muted hover:text-danger group-hover:block"
-              onClick={() => { if (confirm(`Remove "${p.name}" from ZEUS?\nYour files on disk will NOT be deleted. Its conversations will be forgotten.`)) void removeProject(p.id); }}><X size={13} /></button>
+              onClick={() => setConfirmReq({ title: `Remove "${p.name}" from ZEUS?`, description: "Your files on disk will NOT be deleted. Its conversations will be forgotten.", confirmLabel: "Remove", onConfirm: () => removeProject(p.id) })}><X size={13} /></button>
           </div>))}
         {!projects.length && <div className="px-2 py-3 text-xs text-muted">No projects yet. Open an existing folder or create a new one.</div>}
       </div>
@@ -65,12 +67,13 @@ export function ProjectsSidebar() {
             ) : (
               <><button className="min-w-0 flex-1 cursor-pointer truncate text-left text-sm" onClick={() => void selectSession(s.id)} title={s.model ?? ""}>{s.title}</button>
                 <button aria-label="Rename" className="hidden cursor-pointer text-muted hover:text-foreground group-hover:block" onClick={() => { setEditing(s.id); setTitle(s.title); }}><Pencil size={12} /></button>
-                <button aria-label="Delete session" className="hidden cursor-pointer text-muted hover:text-danger group-hover:block" onClick={() => { if (confirm("Delete this conversation?")) void deleteSession(s.id); }}><Trash2 size={12} /></button></>)}
+                <button aria-label="Delete session" className="hidden cursor-pointer text-muted hover:text-danger group-hover:block" onClick={() => setConfirmReq({ title: "Delete this conversation?", description: `"${s.title}" and its messages will be permanently deleted. Files in your project are not affected.`, confirmLabel: "Delete", onConfirm: () => deleteSession(s.id) })}><Trash2 size={12} /></button></>)}
           </div>))}
         {project && !sessions.length && <div className="px-2 py-2 text-xs text-muted">No conversations yet.</div>}
       </div>
       <div className="border-t border-border p-2"><Button variant="ghost" className="w-full justify-start" onClick={() => setSettingsOpen(true)}><Settings size={15} /> Settings</Button></div>
       <NewProjectDialog open={creating} onClose={() => setCreating(false)} />
+      <ConfirmDialog request={confirmReq} onClose={() => setConfirmReq(null)} />
     </aside>
   );
 }

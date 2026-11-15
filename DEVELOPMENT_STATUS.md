@@ -1,6 +1,6 @@
 # ZEUS Phase 1 — Development Status
 
-Last updated: 2026-11-15. Legend: ✅ verified here · 🟡 written, not verifiable in this environment · ❌ not done.
+Last updated: 2026-11-15 (after first install and user testing). Legend: ✅ verified here · 🟡 written, not verifiable in this environment · ❌ not done.
 
 ## Summary
 
@@ -23,7 +23,7 @@ and the desktop entry. An agent run from the installed app created a file (user-
 
 ## Tests run
 
-- Backend: **59 passed** (`backend/.venv/bin/python -m pytest`) — permissions, path/symlink traversal, tools, runner (timeout/cancel), agent loop with a scripted provider, tool-call parsing, API/WebSocket.
+- Backend: **64 passed** (`backend/.venv/bin/python -m pytest`) — permissions, path/symlink traversal, tools, runner (timeout/cancel), agent loop with a scripted provider, tool-call parsing, API/WebSocket.
 - Frontend: **2 passed** (vitest) + typecheck + production build.
 - Real-model runs (`scripts/e2e_demo.py`, same WebSocket protocol as the UI; an auto-approver stands in for the human and every approval is logged).
 - UI run (Playwright + system Chromium → UI → backend → `qwen2.5-coder:7b`): approval dialogs appeared with real content; **Approve Once** wrote `hello.py` to disk; **Reject** on `python3 hello.py` ran nothing.
@@ -55,7 +55,7 @@ Steps 14–15 (close/reopen, resume) were verified by restarting the backend and
 - [x] AI can read / create / edit files
 - [x] File operations respect permissions
 - [x] Terminal execution respects permissions
-- [x] User can inspect file diffs (approval dialog + Monaco diff viewer + A/M/D badges)
+- [x] User can inspect file diffs (inline approval card + Monaco diff viewer + A/M/D badges)
 - [x] Conversations persist across restarts
 - [x] Token usage displayed (Ollama-reported; KV-cache memory is the only estimate and is labelled)
 - [~] Zeus Notes demonstration — succeeds with `qwen3-coder:30b`; not with `qwen2.5-coder:7b` (see above)
@@ -85,7 +85,27 @@ Notes from the first real build:
 - crates.io was very slow from this network; `build-deb.sh` raises cargo's HTTP timeouts and pre-fetches crates.
 - (fixed) `postinst` used to pip-install from PyPI at install time and printed retry warnings on slow links; wheels are now bundled.
 - `apt` prints `N: Download is performed unsandboxed as root` when the .deb is under `$HOME`; harmless.
-- Verified from the installed app (2026-11-15): an agent run created a file (`swap.cpp`) end to end.
-- Post-install fixes: custom dropdown replaces native `<select>` (WebKitGTK popup was unreadable); copy buttons on code blocks; the text tool-call fallback now also parses Qwen-style `<function=…><parameter=…>` calls; accent color is purple; app icon regenerated with a purple bolt (confirmed updated by the user).
-- Usage tab now shows live system metrics (`GET /api/metrics`, `backend/app/metrics.py`): `ollama ps` (loaded models, GPU/CPU split, context, keep-alive countdown), GPU utilization/VRAM/temp/power (nvidia-smi, AMD via sysfs), Ollama process CPU (serve + runner) and RAM, system CPU/RAM. Interactive hover charts, 1.5 s polling only while the tab is open. Verified against a real model under load (GPU 98%, runner 251% of one core). Intel GPUs are not detected (shown as "No GPU detected"). **Confirmed working in the installed app (user, 2026-11-15).**
-- Remaining: clean-machine install test.
+
+## Changes since the first install (user-testing iterations)
+
+All verified on the developer's machine; items marked *(browser)* were verified in Chromium against a real Ollama model and not yet re-checked in the installed desktop build.
+
+| Change | Detail | Verified |
+|---|---|---|
+| Offline install | `.deb` bundles the backend's Python wheels (`packaging/make-wheelhouse.sh`, ~4 MB); `postinst` installs with `--no-index`, falls back to PyPI on a different Python. Runtime deps trimmed to fastapi, uvicorn, websockets, httpx | ✅ installed build (user) |
+| Custom dropdown | Replaced native `<select>` (WebKitGTK popup was white-on-white and dropped clicks) with a dark in-app dropdown; model dropdown widened to 300 px | ✅ installed build (user); width *(browser)* |
+| Text tool-call fallback | Parses Qwen-style `<function=name><parameter=key>…` calls in addition to JSON, so weaker models still create files | ✅ installed build (user) |
+| Theme | Accent changed to purple `#8b5cf6` (buttons, icons, focus); app icon regenerated (all sizes, `.ico`, `.icns`) | ✅ installed build (user) |
+| Usage tab metrics | `GET /api/metrics` (`backend/app/metrics.py`): `ollama ps` (GPU/CPU split, context, keep-alive), NVIDIA/AMD GPU util/VRAM/temp/power, Ollama process (serve + `llama-server` runner) and system CPU/RAM; interactive hover charts, polls only while the tab is open. Intel GPUs not detected | ✅ installed build (user); real-load check: GPU 98%, runner 251% of one core |
+| Copy buttons | Copy icon on code blocks, tool results, command output, diffs, approval commands and the file viewer | ✅ |
+| "Thunderstorm is approaching…" | Animated working indicator while the agent runs ("Waiting for your approval…" while blocked on you) | *(browser)* |
+| Delete session / remove project | Native `confirm()` is a silent no-op in the webview, so deletes never ran; replaced with an in-app confirm dialog and error toasts. Cascade delete verified | *(browser)* |
+| Database self-heal | The backend opens SQLite per call and only created its data folder at startup; deleting `~/.local/share/zeus` while the app ran made every request 500 (this broke "New project > Create"). It now recreates the folder/schema automatically (test added). Data in a deleted folder is not recoverable | ✅ test; fix needs rebuild |
+| Inline approvals | Approval is now a card in the conversation (diff / exact command, Approve Once / Approve for Session / Reject) instead of a modal; `PermissionDialog` removed. Nothing is written before approval | *(browser, real model `qwen3-coder-16k`)*; Reject path not re-clicked in the UI (same handler as before, backend-enforced) |
+| Repository | Source published to `github.com/Ayrus498/zeus` (MIT), README rewritten | ✅ |
+
+## Still open
+
+- Clean-machine install test (second, pristine Ubuntu/Debian machine; ideally a different Python than 3.12).
+- Re-check the *(browser)* items in the rebuilt desktop app.
+- Native folder picker (zenity) flow for **New project** after the database self-heal fix, in the desktop app.

@@ -156,7 +156,7 @@ export const useApp = create<State>((set, get) => {
     },
     async createProject(parent, name) { const p = await api.createProject(parent, name); await get().selectProject(p.id); },
     async removeProject(id) {
-      await api.removeProject(id);
+      try { await api.removeProject(id); } catch (e) { get().notify(`Could not remove project: ${e instanceof Error ? e.message : e}`, "error"); return; }
       const projects = await api.projects(); set({ projects });
       if (get().project?.id === id) {
         set({ project: null, sessions: [], changes: [] }); await loadSession(null);
@@ -174,7 +174,7 @@ export const useApp = create<State>((set, get) => {
     async selectSession(id) { const s = get().sessions.find((x) => x.id === id); if (s) await loadSession(s); },
     async renameSession(id, title) { const s = await api.patchSession(id, { title }); set((st) => ({ sessions: st.sessions.map((x) => (x.id === id ? s : x)), session: st.session?.id === id ? s : st.session })); },
     async deleteSession(id) {
-      await api.deleteSession(id);
+      try { await api.deleteSession(id); } catch (e) { get().notify(`Could not delete session: ${e instanceof Error ? e.message : e}`, "error"); return; }
       const sessions = get().sessions.filter((x) => x.id !== id); set({ sessions });
       if (get().session?.id === id) await loadSession(sessions[0] ?? null);
     },

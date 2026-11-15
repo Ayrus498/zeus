@@ -1,4 +1,6 @@
 """SQLite access. One connection per call keeps threading simple."""
+import logging
+import os
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -26,6 +28,8 @@ CREATE TABLE IF NOT EXISTS file_changes(
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
 
+log = logging.getLogger("zeus.db")
+
 
 class Database:
     def __init__(self, path: Path | str):
@@ -36,8 +40,23 @@ class Database:
         with self.conn() as c:
             c.executescript(SCHEMA)
 
+    def _ensure(self):
+        """If the data folder/file was deleted while the app is running, recreate an empty database
+        instead of failing every request with "unable to open database file"."""
+        if self._mem or os.path.exists(self.path):
+            return
+        log.warning("database file %s disappeared; recreating an empty database", self.path)
+        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+        c = sqlite3.connect(self.path, timeout=10)
+        try:
+            c.executescript(SCHEMA)
+            c.commit()
+        finally:
+            c.close()
+
     @contextmanager
     def conn(self):
+        self._ensure()
         c = self._mem or sqlite3.connect(self.path, timeout=10)
         c.row_factory = sqlite3.Row
         c.execute("PRAGMA foreign_keys=ON")

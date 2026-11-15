@@ -3,6 +3,8 @@ import { AlertTriangle, Check, ChevronDown, ChevronRight, FilePlus, FileEdit, Fi
 import type { TimelineItem } from "../../services/types";
 import { cn } from "../../lib/utils";
 import { Markdown } from "./Markdown";
+import { useApp } from "../../stores/app";
+import { ApprovalCard } from "../permissions/ApprovalCard";
 import { CodeBox } from "../../components/ui/copy";
 
 const ICONS: Record<string, typeof Terminal> = {
@@ -53,9 +55,29 @@ function CommandCard({ item }: { item: Extract<TimelineItem, { kind: "command" }
   );
 }
 
+/** Animated "…" that loops . → .. → ... while the agent is working. */
+function Dots() {
+  const [n, setN] = useState(1);
+  useEffect(() => { const t = setInterval(() => setN((x) => (x % 3) + 1), 450); return () => clearInterval(t); }, []);
+  return <span className="inline-block w-5 text-left" aria-hidden>{".".repeat(n)}</span>;
+}
+
+function WorkingIndicator() {
+  const { running, pending } = useApp();
+  if (!running) return null;
+  const waiting = pending.length > 0;
+  return (
+    <div className="flex items-center gap-2 py-1 text-sm text-muted" role="status" aria-live="polite" data-testid="working-indicator">
+      <Zap size={16} className={cn("text-accent", waiting ? "" : "animate-pulse")} />
+      <span>{waiting ? "Waiting for your approval" : "Thunderstorm is approaching"}<Dots /></span>
+    </div>
+  );
+}
+
 export function Timeline({ items }: { items: TimelineItem[] }) {
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [items]);
+  const pendingCount = useApp((s) => s.pending.length);
+  useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [items, pendingCount]);
   if (!items.length) return (
     <div className="grid h-full place-items-center text-center text-muted">
       <div><Zap className="mx-auto mb-2 text-accent" size={28} /><div className="text-foreground">What should we build?</div>
@@ -74,6 +96,8 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
         return <div key={i} className={cn("flex items-start gap-2 rounded-md px-3 py-2 text-xs", it.level === "error" ? "bg-danger/15 text-danger" : "bg-surface text-muted")}>
           {it.level === "error" && <AlertTriangle size={14} className="mt-0.5 shrink-0" />}{it.text}</div>;
       })}
+      <ApprovalCard />
+      <WorkingIndicator />
       <div ref={end} />
     </div>
   );

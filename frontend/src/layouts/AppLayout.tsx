@@ -2,7 +2,6 @@ import { Files, GitCompare, Gauge, SquareTerminal } from "lucide-react";
 import { ProjectsSidebar } from "../features/projects/ProjectsSidebar";
 import { Timeline } from "../features/chat/Timeline";
 import { PromptInput } from "../features/chat/PromptInput";
-import { PermissionDialog } from "../features/permissions/PermissionDialog";
 import { PermissionModeSelector } from "../features/permissions/PermissionModeSelector";
 import { ModelSelector } from "../features/models/ModelSelector";
 import { SettingsDialog } from "../features/models/SettingsDialog";
@@ -43,7 +42,7 @@ export function AppLayout() {
           {openFile && <div className="min-h-0 flex-1"><FileViewer /></div>}
         </section>
       </div>
-      <StatusBar /><PermissionDialog /><SettingsDialog />
+      <StatusBar /><SettingsDialog />
     </div>
   );
 }

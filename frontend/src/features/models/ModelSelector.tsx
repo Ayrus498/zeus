@@ -18,12 +18,12 @@ export function ModelSelector() {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Cpu size={14} className="text-accent" />
-      <Select aria-label="Model" value={session?.model ?? ""} disabled={!ollama?.connected} onChange={(e) => void setModel(e.target.value)}>
+      <Select aria-label="Model" className="min-w-[300px]" value={session?.model ?? ""} disabled={!ollama?.connected} onChange={(e) => void setModel(e.target.value)}>
         {!session?.model && <option value="">Select model…</option>}
         {missing && <option value={session!.model!}>{session!.model} (not installed)</option>}
         {models.map((m) => <option key={m.name} value={m.name}>{m.name} · {fmtBytes(m.size)}</option>)}
       </Select>
-      <Select aria-label="Context window" value={isMaxSel ? "max" : String(ctx)} disabled={!session} onChange={(e) => void setCtx(e.target.value === "max" ? (max ?? ctx) : Number(e.target.value))}>
+      <Select aria-label="Context window" className="min-w-[110px]" value={isMaxSel ? "max" : String(ctx)} disabled={!session} onChange={(e) => void setCtx(e.target.value === "max" ? (max ?? ctx) : Number(e.target.value))}>
         {options.map((p) => <option key={p} value={p}>{fmtCtx(p)} ctx</option>)}
         {!options.includes(ctx) && !isMaxSel && <option value={ctx}>{ctx.toLocaleString()} ctx</option>}
         {max && <option value="max">Max supported ({fmtCtx(max)})</option>}
