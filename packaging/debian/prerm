@@ -1,0 +1,6 @@
+#!/bin/sh
+set -e
+RES="${ZEUS_RES_DIR:-/usr/lib/zeus}"
+rm -rf "$RES/venv"
+find "$RES/backend" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
+exit 0

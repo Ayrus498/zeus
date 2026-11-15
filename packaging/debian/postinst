@@ -1,0 +1,19 @@
+#!/bin/sh
+# Creates the Python virtualenv for the ZEUS backend next to the installed resources.
+# Dependencies are installed OFFLINE from the wheelhouse bundled in the package (no network needed).
+set -e
+RES="${ZEUS_RES_DIR:-/usr/lib/zeus}"
+if [ -f "$RES/backend/requirements.txt" ]; then
+    rm -rf "$RES/venv"
+    python3 -m venv "$RES/venv"
+    PIP="$RES/venv/bin/pip install --quiet --disable-pip-version-check"
+    if [ -d "$RES/wheelhouse" ] && $PIP --no-index --find-links "$RES/wheelhouse" -r "$RES/backend/requirements.txt"; then
+        :
+    else
+        # Bundled wheels don't match this Python (different version/arch): fall back to PyPI.
+        echo "zeus: bundled wheels not usable with $(python3 --version 2>&1); installing from PyPI..." >&2
+        $PIP --timeout 60 --retries 5 -r "$RES/backend/requirements.txt" \
+            || echo "zeus: WARNING - could not install backend dependencies. Run: sudo $RES/venv/bin/pip install -r $RES/backend/requirements.txt" >&2
+    fi
+fi
+exit 0
