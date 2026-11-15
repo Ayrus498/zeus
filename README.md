@@ -1,11 +1,31 @@
 # ZEUS ⚡
 
+<p align="center"><img src="docs/screenshots/00-hero.png" alt="ZEUS: local AI coding agent for your desktop" width="720"></p>
+
 **A local, Claude-Code-style coding agent for your desktop, powered by [Ollama](https://ollama.com).**
 Pick a project folder, pick a local model, describe what you want. ZEUS reads, creates, edits and runs code in
 your folder, and every write or command passes through a permission engine you control. Nothing leaves your machine.
 
 > **Status: Phase 1 (single agent).** Working on Ubuntu/Debian as an installable `.deb`. See
 > [DEVELOPMENT_STATUS.md](DEVELOPMENT_STATUS.md) for exactly what is verified and what is not.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/01-mission-accepted.png" alt="A mission accepted: each acceptance criterion marked as met, with evidence"><br><sub><b>Missions.</b> Attach a spec; ZEUS works in rounds until every acceptance criterion is verified, with evidence for each.</sub></td>
+    <td width="50%"><img src="docs/screenshots/02-inline-approval.png" alt="Inline approval card showing a diff with Reject, Approve for Session and Approve Once buttons"><br><sub><b>You stay in control.</b> Every write and command shows the diff or exact command inline, and waits for your decision.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/03-live-usage.png" alt="Streaming code in the chat next to live GPU, VRAM and CPU charts"><br><sub><b>Live usage.</b> GPU, VRAM and CPU while a local model generates.</sub></td>
+    <td width="50%"><img src="docs/screenshots/04-models-auto-mode.png" alt="Models tab with Auto mode choosing a coding and a reasoning model"><br><sub><b>Models and Auto mode.</b> Browse and download Ollama models; Auto picks a coding or a reasoning model per prompt.</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/05-attach-convert.png" alt="A Word document attached and converted to Markdown, ready to run as a mission"><br><sub><b>Attach any document.</b> PDF, Word, PowerPoint, Excel and more are converted to Markdown locally (MarkItDown) and run as a mission.</sub></td>
+  </tr>
+</table>
+
+*Screenshots are from real runs on a demo project (model: `qwen3.5:9b` for the mission, `qwen2.5-coder:7b` for the others).*
 
 ## Features
 
