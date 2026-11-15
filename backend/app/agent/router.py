@@ -205,7 +205,7 @@ def score(p: Profile, role: str, gpu_total: int, ram: int) -> tuple[float, list[
             s -= 3.5; why.append("small model")
     place = _placement(p.size, gpu_total, ram) if p.size else "gpu"
     # Speed matters, especially for reasoning (very long outputs): a model that spills to CPU is slow.
-    s += {"gpu": 2, "split": -1 if role == "code" else -3, "cpu": -2, "toolarge": -8}[place]
+    s += {"gpu": 2, "split": -2 if role == "code" else -3, "cpu": -2, "toolarge": -8}[place]
     if place == "gpu":
         why.append("fits GPU")
     elif place == "split":
@@ -213,7 +213,7 @@ def score(p: Profile, role: str, gpu_total: int, ram: int) -> tuple[float, list[
     elif place == "toolarge":
         why.append("too large for this machine")
     if p.loaded:
-        s += 1.5; why.append("already loaded")
+        s += 1.0; why.append("already loaded")
     return s, why
 
 

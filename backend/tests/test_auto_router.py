@@ -98,7 +98,7 @@ def test_too_large_models_are_avoided_and_pins_respected():
 class Recorder:
     def __init__(self, turns): self.turns, self.calls = list(turns), []
 
-    async def chat_stream(self, model, messages, tools, num_ctx):
+    async def chat_stream(self, model, messages, tools, num_ctx, options=None, think=None):
         self.calls.append({"model": model, "tools": tools, "system": messages[0]["content"]})
         t = self.turns.pop(0)
         yield {"message": {"content": t}}
@@ -162,3 +162,9 @@ def test_tiny_models_never_win_just_because_they_fit():
     assert t.model == "deepseek-r1:14b"            # not the 0.6B, and not the dense 32B that would crawl on CPU
     c = decide("create a file hello.txt", real, GPU, RAM, None)
     assert c.model in ("qwen2.5-coder:7b", "qwen3-coder:30b") and c.model != "qwen2.5-coder:1.5b-base"
+
+
+def test_loaded_but_cpu_spilling_model_does_not_beat_a_fast_gpu_model():
+    """Regression: a big model left loaded by an earlier request (half on CPU) was chosen over a 7B that fits the GPU."""
+    fleet = [P("qwen3-coder:30b", 22, loaded=True, caps=["tools"]), P("qwen2.5-coder:7b", 4.7, caps=["tools"])]
+    assert decide("create a file hello.txt", fleet, GPU, RAM, None).model == "qwen2.5-coder:7b"

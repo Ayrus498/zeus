@@ -17,6 +17,7 @@ export type TimelineItem =
   | { kind: "assistant"; agent: string; text: string; streaming?: boolean }
   | { kind: "tool"; id: string; name: string; args: Record<string, unknown>; result?: string; ok?: boolean }
   | { kind: "command"; runId: string; command: string; output: string; status: "running" | "completed" | "timeout" | "cancelled"; exitCode?: number | null }
+  | ({ kind: "mission" } & MissionState)
   | { kind: "route"; model: string; role: string; reason: string; previous?: string | null; tools: boolean }
   | { kind: "notice"; level: "info" | "error"; text: string };
 
@@ -56,3 +57,14 @@ export interface AutoPlan {
   warnings: string[]; suggestions: Array<{ role: "code" | "think"; tag: string; size_gb: number | null; why: string }>;
 }
 export interface AutoPreview { intent: "code" | "think" | "keep"; choice: { model: string; role: string; tools: boolean; reason: string } | null }
+
+export interface MissionCriterion { id: number; text: string; met: boolean | null; evidence: string }
+export type MissionStatus = "running" | "reviewing" | "accepted" | "stalled" | "limit" | "stopped" | "error";
+export interface MissionState {
+  mid: number | null; name: string; title: string; objective: string; criteria: MissionCriterion[]; status: MissionStatus;
+  round: number; maxRounds: number; plan: Record<string, unknown>; feedback: string; summary: string; doc: string;
+}
+export interface MissionRow { id: number; name: string; title: string; objective: string; criteria: MissionCriterion[]; status: MissionStatus; round: number; max_rounds: number; plan: Record<string, unknown>; log: Array<{ feedback?: string }> }
+export interface Attachment { name: string; content: string; size: number; source?: string; truncated?: boolean; omitted?: number }
+export interface ConvertResult { name: string; source: string; markdown: string; title: string | null; chars: number; truncated: boolean; omitted_chars: number; converter: string }
+export interface ConvertFormats { installed: boolean; version: string | null; max_bytes: number; formats: Array<{ ext: string; label: string; needs_markitdown: boolean }> }

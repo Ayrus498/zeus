@@ -10,7 +10,7 @@ from app.tools.engine import ToolEngine
 class Scripted:
     def __init__(self, turns): self.turns, self.seen = list(turns), []
 
-    async def chat_stream(self, model, messages, tools, num_ctx):
+    async def chat_stream(self, model, messages, tools, num_ctx, options=None, think=None):
         self.seen.append(messages)
         t = self.turns.pop(0)
         yield {"message": {"content": t.get("content", ""), "tool_calls": t.get("tool_calls")}}
@@ -115,3 +115,56 @@ def test_xml_style_single_line_unterminated_and_types():
     calls, _ = extract_tool_calls("<function=list_files><parameter=recursive>true</parameter>")
     assert calls[0]["function"]["arguments"] == {"recursive": True}
     assert extract_tool_calls("<function=rm_rf><parameter=x>1</parameter></function>")[0] == []
+
+
+# ---------------------------------------------------------------- malformed tool calls (found on a real 16 KB HTML request)
+BIG_HTML = ('<!DOCTYPE html>\n<html lang="en">\n<head><title>Zeus</title></head>\n<body>\n'
+            '<button class="btn" onclick="go()">Go</button>\n<script>\nconst a = "x";\nfunction go(){ alert("hi"); }\n</script>\n</body>\n</html>')
+
+
+def broken_json_call(content=BIG_HTML):
+    """What the model actually produced: valid-looking JSON in a fence, with one unescaped quote inside the string."""
+    esc = json.dumps(content)[1:-1].replace('onclick=\\"go()\\"', 'onclick=\\"go()"')     # break the escaping like the model did
+    return '```json\n{\n  "name": "create_file",\n  "arguments": {\n    "path": "index.html",\n    "content": "' + esc + '"\n  }\n}\n```'
+
+
+def test_lenient_parser_recovers_file_with_one_bad_quote():
+    from app.agent.toolparse import extract_tool_calls, looks_like_tool_attempt
+    text = broken_json_call()
+    with __import__("pytest").raises(ValueError):
+        json.loads(text.split("```json")[1].split("```")[0])           # strict JSON really is broken
+    calls, clean = extract_tool_calls(text)
+    assert len(calls) == 1 and calls[0]["function"]["name"] == "create_file"
+    a = calls[0]["function"]["arguments"]
+    assert a["path"] == "index.html" and a["content"].startswith("<!DOCTYPE html>\n") and a["content"].rstrip().endswith("</html>")
+    assert "\\n" not in a["content"] and 'function go(){ alert("hi"); }' in a["content"] and clean == ""
+    assert looks_like_tool_attempt(text) and not looks_like_tool_attempt("Here is how a mutex works.")
+
+
+def test_lenient_parser_keeps_reason_and_ignores_non_files():
+    from app.agent.toolparse import extract_tool_calls
+    t = '```json\n{"name": "create_file", "arguments": {"path": "a.txt", "content": "he said "hi"\\nbye", "reason": "demo"}}\n```'
+    a = extract_tool_calls(t)[0][0]["function"]["arguments"]
+    assert a["content"] == 'he said "hi"\nbye' and a["reason"] == "demo"
+    assert extract_tool_calls('```json\n{"name": "delete_file", "arguments": {"path": "a" broken}}\n```')[0] == []   # only files are repaired
+
+
+async def test_engine_retries_a_malformed_tool_call_instead_of_ending(harness, ws_dir, db):
+    h = harness("trusted")
+    s = SessionManager(db).create(h.ctx.project["id"], model="m", num_ctx=4096)
+    garbage = 'Sure:\n```json\n{"name": "create_file", "arguments": {"path": "a.py", "content": "x = (1,\n```'      # unparseable even leniently
+    prov = Scripted([{"content": garbage}, {"tool_calls": [call("create_file", path="a.py", content="x=1", reason="r")]}, {"content": "done"}])
+    await AgentEngine(db, prov, ToolEngine()).run(h.ctx, s, "make a.py")
+    assert (ws_dir / "a.py").read_text() == "x=1"                                  # recovered after one correction
+    assert any(e["type"] == "notice" and "retry" in e["text"] for e in h.events)
+    assert "could not be parsed" in prov.seen[1][-1]["content"]                     # the model was told what went wrong
+    assert garbage not in [m["content"] for m in SessionManager(db).messages(s["id"])]   # garbage is not kept in history
+
+
+async def test_engine_gives_up_after_two_retries(harness, db):
+    h = harness("trusted")
+    s = SessionManager(db).create(h.ctx.project["id"], model="m")
+    bad = '{"name": "create_file", "arguments": {"path": '
+    prov = Scripted([{"content": bad}, {"content": bad}, {"content": bad}])
+    await AgentEngine(db, prov, ToolEngine()).run(h.ctx, s, "go")
+    assert [e["type"] for e in h.events][-1] == "run_end" and len([e for e in h.events if e["type"] == "notice"]) == 2

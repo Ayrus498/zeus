@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import shutil
 import subprocess
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -20,6 +21,8 @@ from ..permissions.manager import (ACTIONS, DEFAULT_POLICY, MODES, PathViolation
                                    parse_custom, resolve_in_workspace)
 from ..projects.manager import ProjectError, ProjectManager
 from .. import metrics
+from ..convert import service as convert_service
+from ..agent.mission import MAX_DOC_BYTES, MissionRunner
 from ..agent.router import AUTO, AutoRouter, classify, decide
 from ..persistence.zeusdir import ZeusFiles
 from ..providers import catalog as model_catalog
@@ -28,7 +31,8 @@ from ..providers.ollama import OllamaError, OllamaProvider, context_warning, sys
 from ..sessions.manager import SessionManager
 from ..sessions.runtime import SessionRuntime
 from ..terminal.runner import Runner
-from ..tools.engine import ToolContext, ToolEngine
+from ..permissions.manager import PathViolation
+from ..tools.engine import ToolContext, ToolEngine, _resolve_write
 
 
 class AddProject(BaseModel):
@@ -59,6 +63,13 @@ class ModelReq(BaseModel):
 
 class UrlReq(BaseModel):
     url: str
+
+
+class SaveFile(BaseModel):
+    path: str
+    content: str
+    session_id: int | None = None
+    overwrite: bool = False
 
 
 class PinsUpdate(BaseModel):
@@ -95,6 +106,7 @@ def create_app(db_path=None) -> FastAPI:
     agent.on_change = zfiles.schedule
     auto = AutoRouter(db, lambda: state["provider"])
     agent.router = auto
+    mission_runner = MissionRunner(db, agent)
     app.state.db, app.state.runtimes, app.state.projects, app.state.zfiles = db, runtimes, projects, zfiles
     zfiles.write_home()
 
@@ -344,6 +356,31 @@ def create_app(db_path=None) -> FastAPI:
         zfiles.restore_project(proj)
         return projects.get(pid)
 
+    @app.post("/api/projects/{pid}/files")
+    async def save_file(pid: int, b: SaveFile):
+        """User-initiated 'Save as file' for a code block shown in chat. The click is the user's explicit action, so no
+        approval prompt - but the same safety rules apply: inside the project only, never in .zeus, not in read-only mode."""
+        proj = proj_or_404(pid)
+        if proj["permission_mode"] == "read_only":
+            raise HTTPException(403, "This project is in read-only mode. Change the permission mode to save files.")
+        if len(b.content.encode("utf-8")) > config.MAX_FILE_BYTES:
+            raise HTTPException(413, "Content is too large to save from here.")
+        try:
+            p = _resolve_write(proj["path"], b.path)
+        except PathViolation as e:
+            raise HTTPException(400, str(e))
+        rel = str(p.relative_to(Path(proj["path"]).resolve()))
+        if p.is_dir():
+            raise HTTPException(400, f"{rel} is a folder")
+        before = p.read_text("utf-8", errors="replace") if p.exists() else None
+        if before is not None and not b.overwrite:
+            raise HTTPException(409, f"{rel} already exists")
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(b.content, encoding="utf-8")
+        db.x("INSERT INTO file_changes(session_id,project_id,path,op,before,after,created) VALUES(?,?,?,?,?,?,?)",
+             (b.session_id, pid, rel, "edit" if before is not None else "create", before, b.content, now()))
+        return {"ok": True, "path": rel, "bytes": len(b.content.encode("utf-8")), "overwritten": before is not None}
+
     @app.get("/api/projects/{pid}/tree")
     async def tree(pid: int, rel: str = ""):
         proj_or_404(pid)
@@ -489,6 +526,77 @@ def create_app(db_path=None) -> FastAPI:
 
         rt.task = asyncio.create_task(job())
 
+    async def start_mission(sid: int, m: dict):
+        rt = runtime(sid)
+        s = sessions.get(sid)
+        if rt.running:
+            await rt.emit({"type": "error", "message": "A run is already in progress for this session."})
+            return
+        if not s["model"]:
+            await rt.emit({"type": "error", "message": "No model selected. Choose a model first."})
+            return
+        name = re.sub(r"[^\w .()+-]", "_", os.path.basename(str(m.get("name") or "mission.md")))[:120] or "mission.md"
+        content = str(m.get("content") or "")
+        if not name.lower().endswith((".md", ".markdown")):
+            await rt.emit({"type": "error", "message": "Only Markdown (.md) documents can be attached."})
+            return
+        if not content.strip() or len(content.encode("utf-8")) > MAX_DOC_BYTES:
+            await rt.emit({"type": "error", "message": f"The document is empty or larger than {MAX_DOC_BYTES // 1000} KB."})
+            return
+        proj = projects.get(s["project_id"])
+        rt.perms.mode, rt.perms.custom = proj["permission_mode"], parse_custom(proj["custom_permissions"])
+        ctx = ToolContext(project=proj, session_id=sid, agent="coder", perms=rt.perms, db=db, runner=runner,
+                          emit=rt.emit, request=rt.request_permission)
+
+        async def job():
+            try:
+                await mission_runner.run(ctx, sessions.get(sid), name, content, str(m.get("note") or "")[:4000],
+                                         int(m.get("max_rounds") or 5), "think" if m.get("verifier") == "think" else "same")
+            except asyncio.CancelledError:
+                rt.reject_all()
+                await rt.emit({"type": "run_end", "status": "stopped"})
+            except Exception:
+                pass  # already reported via 'error' event
+
+        rt.task = asyncio.create_task(job())
+
+    @app.get("/api/convert/formats")
+    async def convert_formats():
+        """Which attachment types ZEUS can turn into Markdown, and whether MarkItDown is installed."""
+        return convert_service.info()
+
+    @app.post("/api/convert")
+    async def convert_file(request: Request, filename: str):
+        """Convert an uploaded document (raw request body) to Markdown with MarkItDown, in an isolated subprocess.
+        The result is only returned to the caller; nothing is stored or written into any project."""
+        limit = convert_service.MAX_INPUT
+        declared = request.headers.get("content-length")
+        if declared and declared.isdigit() and int(declared) > limit:
+            raise HTTPException(413, f"The file is larger than {limit // 2**20} MB.")
+        chunks, size = [], 0
+        async for c in request.stream():
+            size += len(c)
+            if size > limit:
+                raise HTTPException(413, f"The file is larger than {limit // 2**20} MB.")
+            chunks.append(c)
+        try:
+            return await convert_service.convert_bytes(b"".join(chunks), filename)
+        except convert_service.ConvertError as e:
+            raise HTTPException(e.status, e.message)
+
+    @app.get("/api/sessions/{sid}/missions")
+    async def session_missions(sid: int):
+        if not sessions.get(sid):
+            raise HTTPException(404, "unknown session")
+        rows = db.q("SELECT * FROM missions WHERE session_id=? ORDER BY id", (sid,))
+        for r in rows:
+            for k in ("criteria", "plan", "log"):
+                try:
+                    r[k] = json.loads(r[k])
+                except Exception:
+                    r[k] = [] if k != "plan" else {}
+        return rows
+
     @app.websocket("/ws/sessions/{sid}")
     async def ws_session(ws: WebSocket, sid: int):
         await ws.accept()
@@ -505,6 +613,8 @@ def create_app(db_path=None) -> FastAPI:
                 t = m.get("type")
                 if t == "prompt" and str(m.get("content", "")).strip():
                     await start_run(sid, m["content"].strip())
+                elif t == "mission":
+                    await start_mission(sid, m)
                 elif t == "stop" and rt.running:
                     rt.reject_all()
                     runner.cancel_all()

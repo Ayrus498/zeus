@@ -69,6 +69,49 @@ def _xml_calls(text: str) -> tuple[list[dict], list[tuple[int, int]]]:
     return calls, spans
 
 
+_JSON_ESC = re.compile(r'\\(["\\/bfnrt]|u[0-9a-fA-F]{4})')
+_ESC_MAP = {"b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", '"': '"', "\\": "\\", "/": "/"}
+
+
+def _unescape(raw: str) -> str:
+    """Decode JSON string escapes leniently: unknown backslashes and bare quotes are kept as they are."""
+    return _JSON_ESC.sub(lambda m: chr(int(m.group(1)[1:], 16)) if m.group(1)[0] == "u" else _ESC_MAP[m.group(1)], raw)
+
+
+_LEN_TOOLS = ("create_file", "edit_file")
+
+
+def lenient_file_call(text: str) -> dict | None:
+    """Recover a create_file call whose JSON is *almost* valid (typically one unescaped quote inside a large HTML/JS
+    string, which makes strict json.loads reject a 16 KB file). Extracts path/content by position instead of parsing."""
+    if not re.search(r'"name"\s*:\s*"create_file"', text):
+        return None
+    pm = re.search(r'"path"\s*:\s*"([^"\n]+)"', text)
+    cm = re.search(r'"content"\s*:\s*"', text)
+    if not pm or not cm:
+        return None
+    start = cm.end()
+    # the string ends at the last quote that is followed only by an optional "reason" field and closing braces/fence
+    end_re = re.compile(r'"\s*(?:,\s*"reason"\s*:\s*"(?:[^"\\]|\\.)*"\s*)?\}\s*\}?\s*(?:`{3}\s*)?\Z|"\s*(?:,\s*"reason"\s*:\s*"(?:[^"\\]|\\.)*"\s*)?\}\s*\}?\s*`{3}', re.S)
+    ends = [m for m in end_re.finditer(text, start)]
+    if not ends:
+        return None
+    content = _unescape(text[start:ends[-1].start()])
+    reason = re.search(r'"reason"\s*:\s*"((?:[^"\\]|\\.)*)"', text[ends[-1].start():])
+    if not content.strip():
+        return None
+    args = {"path": _unescape(pm.group(1)), "content": content}
+    if reason:
+        args["reason"] = _unescape(reason.group(1))
+    return {"function": {"name": "create_file", "arguments": args}}
+
+
+def looks_like_tool_attempt(text: str) -> bool:
+    """True if the text appears to be an (unparseable) tool call: the model tried but the format was broken."""
+    names = "|".join(SCHEMA_BY_NAME)
+    return bool(re.search(rf'"name"\s*:\s*"(?:{names})"', text) or re.search(rf"<function=(?:{names})\b", text))
+
+
 def extract_tool_calls(text: str) -> tuple[list[dict], str]:
     """Returns (calls, text with the tool-call JSON removed). Only known tools are accepted."""
     found, spans = _xml_calls(text)
@@ -77,7 +120,7 @@ def extract_tool_calls(text: str) -> tuple[list[dict], str]:
             try:
                 c = _normalize(json.loads(m.group(1)))
             except Exception:
-                c = None
+                c = lenient_file_call(m.group(1))        # one bad escape must not lose a whole file
             if c:
                 found.append(c)
                 spans.append(m.span())
@@ -106,3 +149,12 @@ def extract_tool_calls(text: str) -> tuple[list[dict], str]:
 
 def parse_text_tool_calls(text: str) -> list[dict]:
     return extract_tool_calls(text)[0]
+
+
+_FABRICATED = re.compile(r"</?tool_(?:response|result|output)>|^\s*(?:Created|Edited|Deleted|Wrote) [\w./-]+ \(\d+ chars?\)\s*$|^\s*exit code: -?\d+\s*$", re.I | re.M)
+
+
+def looks_fabricated_tool_output(text: str) -> bool:
+    """True if the model typed what looks like a tool RESULT itself (a classic small-model failure: it narrates that the tool
+    ran, with invented output, instead of calling it). Only the system produces tool results."""
+    return bool(text and _FABRICATED.search(text))

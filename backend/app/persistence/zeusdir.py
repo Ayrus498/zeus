@@ -98,7 +98,14 @@ class ZeusFiles:
             msgs = self.db.q("SELECT agent,role,content,tool_calls,tool_name,created FROM messages WHERE session_id=? ORDER BY id", (sid,))
             for m in msgs:
                 m["tool_calls"] = json.loads(m["tool_calls"]) if m["tool_calls"] else None
-            doc = {"version": VERSION, "uid": s["uid"], "title": s["title"], "model": s["model"], "last_model": s["last_model"], "num_ctx": s["num_ctx"],
+            missions = self.db.q("SELECT name,title,objective,criteria,status,round,max_rounds,plan,log,created,updated FROM missions WHERE session_id=? ORDER BY id", (sid,))
+            for ms in missions:
+                for k in ("criteria", "plan", "log"):
+                    try:
+                        ms[k] = json.loads(ms[k])
+                    except Exception:
+                        ms[k] = [] if k != "plan" else {}
+            doc = {"version": VERSION, "missions": missions, "uid": s["uid"], "title": s["title"], "model": s["model"], "last_model": s["last_model"], "num_ctx": s["num_ctx"],
                    "created": s["created"], "updated": s["updated"], "input_tokens": s["input_tokens"],
                    "output_tokens": s["output_tokens"], "messages": msgs}
             _atomic_write(d / "sessions" / f"{s['uid']}.json", json.dumps(doc, ensure_ascii=False, indent=1))
@@ -234,4 +241,13 @@ class ZeusFiles:
             tc = json.dumps(tc) if isinstance(tc, list) else None
             self.db.x("INSERT INTO messages(session_id,agent,role,content,tool_calls,tool_name,created) VALUES(?,?,?,?,?,?,?)",
                       (sid, txt(m.get("agent"), "coder", 40) or "coder", m["role"], m.get("content", ""), tc, txt(m.get("tool_name"), None, 80), num(m.get("created"), now())))
+        for ms in doc.get("missions", []) if isinstance(doc.get("missions"), list) else []:
+            if not isinstance(ms, dict):
+                continue
+            self.db.x("INSERT INTO missions(session_id,name,title,objective,criteria,status,round,max_rounds,plan,log,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                      (sid, txt(ms.get("name"), "mission.md", 120), txt(ms.get("title"), "Mission", 120), txt(ms.get("objective"), "", 1500),
+                       json.dumps(ms.get("criteria") if isinstance(ms.get("criteria"), list) else []), txt(ms.get("status"), "stopped", 20),
+                       int(num(ms.get("round"))), int(num(ms.get("max_rounds"), 5)) or 5,
+                       json.dumps(ms.get("plan") if isinstance(ms.get("plan"), dict) else {}), json.dumps(ms.get("log") if isinstance(ms.get("log"), list) else []),
+                       num(ms.get("created"), now()), num(ms.get("updated"), now())))
         return True

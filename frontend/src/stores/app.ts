@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { api, type PermInfo, type Settings } from "../services/api";
 import { Socket } from "../services/socket";
 import type {
-  ChangeEntry, Mode, ModelInfo, ModelMeta, OllamaStatus, PermissionRequest, Policy, Project, Session, TimelineItem, Usage, Overview, Toast,
+  ChangeEntry, Mode, ModelInfo, ModelMeta, OllamaStatus, PermissionRequest, Policy, Project, Session, TimelineItem, Usage, Overview, Toast, Attachment, MissionState,
 } from "../services/types";
 
 export type RightTab = "files" | "changes" | "terminal" | "usage" | "models";
@@ -17,7 +17,8 @@ interface State {
   timeline: TimelineItem[]; running: boolean; modelState: "idle" | "loading" | "ready"; activeModel: string | null;
   pending: PermissionRequest[]; usage: Usage | null;
   changes: ChangeEntry[]; treeVersion: number; openFile: OpenFile | null; rightTab: RightTab; settingsOpen: boolean;
-  overview: Overview | null; toasts: Toast[];
+  overview: Overview | null; toasts: Toast[]; attachment: Attachment | null;
+  setAttachment(a: Attachment | null): void; sendMission(o: { note: string; rounds: number; verifier: "same" | "think" }): void;
   refreshOverview(): Promise<void>; pullModel(name: string): Promise<void>; cancelDownload(id: number): Promise<void>;
   dismissDownload(id: number): Promise<void>; unloadModel(name: string): Promise<void>;
   toast(text: string, level?: Toast["level"]): void; dismissToast(id: number): void;
@@ -41,7 +42,16 @@ export function timelineFromMessages(msgs: Awaited<ReturnType<typeof api.message
   const out: TimelineItem[] = [];
   const open: Array<Extract<TimelineItem, { kind: "tool" }>> = [];
   for (const m of msgs) {
-    if (m.role === "user") out.push({ kind: "user", text: m.content });
+    if (m.role === "user") {
+      const mk = /^<!--zeus:mission id=(\d+) name=(.*?)-->\n/.exec(m.content);
+      if (mk) {
+        const doc = /```+markdown\n([\s\S]*?)\n```+\s*$/.exec(m.content)?.[1] ?? "";
+        out.push({ kind: "mission", mid: Number(mk[1]), name: mk[2], title: mk[2], objective: "", criteria: [], status: "stopped", round: 0, maxRounds: 0, plan: {}, feedback: "", summary: "", doc });
+      } else if (/^<!--zeus:feedback round=(\d+)-->/.test(m.content)) {
+        const r = /^<!--zeus:feedback round=(\d+)-->/.exec(m.content)![1];
+        out.push({ kind: "notice", level: "info", text: `ZEUS review (round ${r}): not accepted yet. The unmet criteria were sent back to the agent.` });
+      } else out.push({ kind: "user", text: m.content });
+    }
     else if (m.role === "assistant") {
       if (m.content.trim()) out.push({ kind: "assistant", agent: m.agent, text: m.content });
       for (const c of m.tool_calls ?? []) {
@@ -65,22 +75,47 @@ export const useApp = create<State>((set, get) => {
       return {};
     });
 
+  const patchMission = (mid: number, fn: (m: MissionState) => MissionState) =>
+    set((st) => ({ timeline: st.timeline.map((it) => (it.kind === "mission" && it.mid === mid ? { ...fn(it), kind: "mission" as const } : it)) }));
+
+  // Streamed tokens are buffered and applied in one update (see the "token" case).
+  const tokenBuf = { agent: "coder", text: "" };
+  let tokenTimer: ReturnType<typeof setTimeout> | null = null;
+  function flushTokens() {
+    if (tokenTimer) { clearTimeout(tokenTimer); tokenTimer = null; }
+    if (!tokenBuf.text) return;
+    const { agent, text } = tokenBuf; tokenBuf.text = "";
+    set((s) => {
+      const t = s.timeline.slice(); const last = t[t.length - 1];
+      if (last?.kind === "assistant" && last.streaming) t[t.length - 1] = { ...last, text: last.text + text };
+      else t.push({ kind: "assistant", agent, text, streaming: true });
+      return { timeline: t };
+    });
+  }
+
   function handle(ev: Record<string, any>) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (ev.type !== "token") flushTokens();            // keep event order: pending text lands before whatever comes next
     switch (ev.type) {
       case "state": set({ running: ev.running, pending: ev.pending.map((p: PermissionRequest) => ({ ...p, session_id: ev.session_id })) }); break;
       case "run_start": set({ running: true }); break;
+      case "mission_start":
+        set((st) => ({ running: true, timeline: [...st.timeline, { kind: "mission", mid: ev.id, name: ev.name, title: ev.title, objective: ev.objective, criteria: ev.criteria,
+          status: "running", round: 0, maxRounds: ev.max_rounds, plan: ev.plan ?? {}, feedback: "", summary: "", doc: st.attachment?.content ?? "" }], attachment: null })); break;
+      case "mission_round": patchMission(ev.id, (m) => ({ ...m, round: ev.round, status: "running" })); break;
+      case "mission_verifying": patchMission(ev.id, (m) => ({ ...m, status: "reviewing" })); break;
+      case "mission_check": patchMission(ev.id, (m) => ({ ...m, criteria: ev.results, feedback: ev.feedback ?? "", status: "running" })); break;
+      case "mission_end": patchMission(ev.id, (m) => ({ ...m, status: ev.status, summary: ev.summary })); break;
       case "model_selected":
         set((st) => ({ activeModel: ev.model, session: st.session ? { ...st.session, last_model: ev.model } : st.session,
           timeline: [...st.timeline, { kind: "route", model: ev.model, role: ev.role, reason: ev.reason, previous: ev.previous, tools: ev.tools }] })); break;
       case "model_loading": set({ modelState: "loading" }); break;
       case "model_ready": set({ modelState: "ready" }); break;
       case "token":
-        set((s) => {
-          const t = s.timeline.slice(); const last = t[t.length - 1];
-          if (last?.kind === "assistant" && last.streaming) t[t.length - 1] = { ...last, text: last.text + ev.text };
-          else t.push({ kind: "assistant", agent: ev.agent, text: ev.text, streaming: true });
-          return { timeline: t };
-        }); break;
+        // Tokens arrive far faster than the screen can usefully repaint; coalesce them so a big code block is
+        // re-parsed ~12x/second instead of once per token.
+        tokenBuf.agent = ev.agent; tokenBuf.text += ev.text;
+        if (!tokenTimer) tokenTimer = setTimeout(flushTokens, 80);
+        break;
       case "assistant_end":
         // `text` is the final content with any text-form tool-call JSON removed; empty => drop the bubble
         set((s) => ({ timeline: s.timeline.flatMap<TimelineItem>((i) => (i.kind === "assistant" && i.streaming ? (ev.text?.trim() ? [{ ...i, text: ev.text, streaming: false }] : []) : [i])) })); break;
@@ -102,6 +137,7 @@ export const useApp = create<State>((set, get) => {
         set((s) => ({ session: s.session ? { ...s.session, input_tokens: ev.session_input, output_tokens: ev.session_output } : s.session, usage: { prompt_tokens: ev.prompt_tokens, output_tokens: ev.output_tokens, tokens_per_sec: ev.tokens_per_sec,
           session_input: ev.session_input, session_output: ev.session_output, context_used: ev.context_used } })); break;
       case "error": get().notify(ev.message, "error"); break;
+      case "notice": get().notify(ev.text, ev.level === "error" ? "error" : "info"); break;
       case "run_end":
         set((s) => ({ running: false, modelState: "idle", pending: [], timeline: s.timeline.map((i) => (i.kind === "assistant" && i.streaming ? { ...i, streaming: false } : i)) }));
         if (ev.status === "stopped") get().notify("Generation stopped.");
@@ -113,11 +149,24 @@ export const useApp = create<State>((set, get) => {
   }
 
   async function loadSession(sess: Session | null) {
-    sock?.close(); sock = null;
+    sock?.close(); sock = null; tokenBuf.text = ""; if (tokenTimer) { clearTimeout(tokenTimer); tokenTimer = null; }
     set({ session: sess, timeline: [], pending: [], running: false, usage: null, modelState: "idle", activeModel: sess?.last_model ?? null });
     if (!sess) return;
     const msgs = await api.messages(sess.id);
-    set({ timeline: timelineFromMessages(msgs) });
+    const tl = timelineFromMessages(msgs);
+    set({ timeline: tl });
+    if (tl.some((i) => i.kind === "mission")) {
+      try {      // the Nth mission document in the conversation is the Nth mission row
+        const rows = await api.missions(sess.id);
+        let n = 0;
+        set((st) => ({ timeline: st.timeline.map((it) => {
+          if (it.kind !== "mission") return it;
+          const r = rows[n++];
+          return r ? { ...it, mid: r.id, title: r.title, objective: r.objective, criteria: r.criteria, status: r.status === "running" ? "stopped" : r.status, round: r.round, maxRounds: r.max_rounds,
+            plan: r.plan, feedback: [...r.log].reverse().find((l) => l.feedback)?.feedback ?? "" } : it;
+        }) }));
+      } catch { /* mission details are optional on reload */ }
+    }
     sock = new Socket(`/ws/sessions/${sess.id}`, handle);
     if (sess.model && sess.model !== "auto") void api.modelInfo(sess.model, sess.num_ctx ?? undefined).then((m) => set({ modelMeta: m })).catch(() => set({ modelMeta: null }));
   }
@@ -128,7 +177,14 @@ export const useApp = create<State>((set, get) => {
     timeline: [], running: false, modelState: "idle", activeModel: null, pending: [], usage: null,
     changes: [], treeVersion: 0, openFile: null, rightTab: "files", settingsOpen: false,
 
-    overview: null, toasts: [],
+    overview: null, toasts: [], attachment: null,
+    setAttachment: (attachment) => set({ attachment }),
+    sendMission({ note, rounds, verifier }) {
+      const a = get().attachment; const sess = get().session;
+      if (!a || !sess) return;
+      set({ running: true });
+      sock?.send({ type: "mission", name: a.name, content: a.content, note, max_rounds: rounds, verifier });
+    },
     toast(text, level = "info") {
       const id = ++toastSeq;
       set((s) => ({ toasts: [...s.toasts, { id, level, text }].slice(-4) }));

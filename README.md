@@ -13,6 +13,9 @@ your folder, and every write or command passes through a permission engine you c
 - **Any local Ollama model**: models are discovered dynamically (nothing hard-coded); choose context size (8K / 16K / 32K / 64K / model max) with a memory warning.
 - **Tool-using agent**: `list_files`, `read_file`, `search_files`, `create_file`, `edit_file`, `delete_file`, `run_command`, `git_status`, `git_diff`. Works with native tool calls and falls back to parsing JSON / `<function=...>` tool calls printed as text by weaker models.
 - **Backend-enforced permissions**: read-only / approval / trusted / custom, inline approval cards in the conversation (diffs and the exact command, Approve Once / Approve for Session / Reject), path and symlink validation.
+- **Attach documents (MarkItDown)**: besides `.md`, attach PDF, Word, PowerPoint, Excel, CSV, HTML, JSON, XML, EPUB, Jupyter notebooks, ZIP or text files. ZEUS converts them to Markdown with Microsoft's [MarkItDown](https://github.com/microsoft/markitdown) (locally, in an isolated process with no network) and uses the result like any attached `.md`.
+- **Missions (attach a `.md` file)**: click the paperclip (or drop a Markdown file on the prompt box) and ZEUS reads it as the task, then works in rounds until the result is *verified*: the agent does the work, a strict review pass checks every acceptance criterion against evidence (files written, commands run, exit codes), and anything unmet goes back to the agent. It stops when everything is accepted, when you press Stop, when a round makes no progress, or at the round limit. See [Missions](#missions-attach-a-md-file).
+- **Model-aware prompting**: requests are shaped per model from Ollama's own metadata (tool/thinking capability, the creators' recommended sampling parameters) plus family rules (e.g. DeepSeek-R1 gets instructions in the user turn, thinking is off for fast tool steps on hybrid Qwen3 models, a text tool protocol for models without native tool calling) and the context window is sized to the document.
 - **Auto model mode**: choose "✨ Auto" in the model dropdown and ZEUS picks a coding or a reasoning model for each prompt from the models you have installed (using what it knows about each model, your GPU/RAM and what is already loaded). The pick is explained in the chat; pin your own choice per role in the Models tab, or start a prompt with `/think` or `/code` to force one.
 - **Models tab (model guide)**: a curated guide to ~30 well-known Ollama models (what each is best for, how well it suits the ZEUS agent, approximate sizes, whether it fits your GPU/RAM) with **Download** and **Unload** buttons, live download progress, persisted download history and in-page error messages. If Ollama is missing, it shows an install/start guide with links.
 - **Live Usage tab**: `ollama ps` (loaded models, GPU/CPU split, keep-alive), GPU utilization / VRAM (NVIDIA, AMD), Ollama and system CPU/RAM, with interactive hover charts, plus real token counts from Ollama.
@@ -73,6 +76,35 @@ Ollama and models are not bundled. Install them separately.
 zeus                       # or launch "zeus" from the application menu (it starts its own backend on 127.0.0.1:8765)
 sudo apt remove zeus       # your data stays in ~/.local/share/zeus (delete it to remove sessions/history)
 ```
+
+## Missions (attach a `.md` file)
+
+Write what you want in Markdown and attach it (paperclip, or drag the file onto the prompt box; up to 200 KB). A good document has an
+**Objective** and an **Acceptance criteria** checklist (checkboxes, or a section named *Acceptance criteria / Requirements / Definition of done /
+Deliverables / Verification*) - see [docs/examples/mission-example.md](docs/examples/mission-example.md). Without criteria, ZEUS asks the model to extract
+verifiable ones. You can add extra instructions in the prompt box and pick the maximum number of rounds.
+
+What happens: the agent works with its normal tools -> **evidence** is collected (files written, commands run with exit codes, files named in the
+criteria checked on disk) -> a reviewer pass judges each criterion from that evidence only; objective facts override it (a "tests pass" criterion needs the
+latest test command to have exited 0; a named file must exist) -> unmet criteria and the failing output go back to the agent -> next round. The card in the chat
+shows round, per-criterion status and evidence, the reviewer's feedback and how ZEUS prepared its requests for the model.
+
+Notes: every write and command still goes through your permission mode (in *Approval* mode a long mission asks a lot - *Trusted* mode suits it);
+a document is treated as your instructions, so attach only files you trust; small models may need several rounds or stall, which ZEUS reports instead of looping forever.
+
+### Attaching other document types
+
+The paperclip also accepts **.pdf, .docx, .pptx, .xlsx, .xls, .csv, .html, .json, .xml, .epub, .ipynb, .zip, .txt**. ZEUS converts the file to Markdown with
+[MarkItDown](https://github.com/microsoft/markitdown) (the result is named `report.pdf.md`, shown with a preview so you can check it) and then it behaves exactly
+like an attached `.md`: it becomes the mission document. Limits: 25 MB per file; converted text is cut at 200 KB (you are told when that happens).
+
+What is deliberately **not** supported: images and audio (MarkItDown needs online services or an LLM for them), URLs, plugins, and scanned PDFs without a text layer
+(run OCR first - you get a clear error). The conversion runs in a separate process with a hard timeout, CPU/memory limits and **network access blocked**; only the
+converters ZEUS lists are loaded (no audio/YouTube/Bing/Azure converters), a corrupt file fails instead of being read as raw bytes, and nothing is written into your project.
+
+Install note: the `.deb` bundles MarkItDown with its PDF/Word/PowerPoint/Excel extras so installing stays offline. That is about **100 MB of wheels** (the package is
+~100 MB and ~500 MB on disk after install), mostly `onnxruntime`/`magika` (file-type detection), `numpy`/`pandas` (Excel) and `pillow`. To slim it down, edit the
+`markitdown[...]` line in `backend/requirements.txt` (for example drop `xlsx,xls` to avoid pandas/numpy) before building. From source: `pip install -r backend/requirements.txt`.
 
 ## Where your data lives
 

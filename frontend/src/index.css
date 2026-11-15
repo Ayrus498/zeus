@@ -18,6 +18,8 @@
 }
 
 html { color-scheme: dark; }
+/* The chat scroller is pinned by script while streaming; native scroll anchoring would fight it and cause jitter. */
+main .overflow-auto { overflow-anchor: none; }
 html, body, #root { height: 100%; }
 /* Native dropdown popups (WebKitGTK) ignore inherited colours: set them explicitly. */
 select { color-scheme: dark; }
@@ -29,7 +31,8 @@ body { background: var(--color-background); color: var(--color-foreground); font
 .prose-zeus ul, .prose-zeus ol { margin: 0.4rem 0 0.4rem 1.2rem; list-style: revert; }
 .prose-zeus h1, .prose-zeus h2, .prose-zeus h3 { font-weight: 600; margin: 0.8rem 0 0.3rem; }
 .prose-zeus code:not(pre code) { background: var(--color-surface-2); padding: 0.1rem 0.35rem; border-radius: 4px; font-family: var(--font-mono); font-size: 0.9em; }
-.prose-zeus pre { background: #0d1117; border: 1px solid var(--color-border); border-radius: 8px; padding: 0.75rem; overflow-x: auto; margin: 0.5rem 0; font-size: 12.5px; }
+.prose-zeus pre { background: #0d1117; border: 1px solid var(--color-border); border-radius: 8px; padding: 0.75rem; overflow: auto; max-height: min(26rem, 55vh); margin: 0.5rem 0; font-size: 12.5px; overscroll-behavior: contain; }
+.prose-zeus pre { scrollbar-width: thin; }
 .prose-zeus pre code { font-family: var(--font-mono); background: transparent; }
 .prose-zeus a { color: var(--color-accent); text-decoration: underline; }
 .prose-zeus table { border-collapse: collapse; } .prose-zeus th, .prose-zeus td { border: 1px solid var(--color-border); padding: 2px 8px; }

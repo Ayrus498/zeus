@@ -67,7 +67,7 @@ class OllamaProvider:
         heads, kv = g("attention.head_count"), g("attention.head_count_kv") or g("attention.head_count")
         emb = g("embedding_length")
         key_len = g("attention.key_length") or (emb / heads if emb and heads else None)
-        return {"name": name, "architecture": arch, "context_length": g("context_length"),
+        return {"name": name, "architecture": arch, "context_length": g("context_length"), "template": j.get("template", ""),
                 "block_count": g("block_count"), "kv_heads": kv, "head_dim": key_len,
                 "capabilities": j.get("capabilities", []), "parameters": j.get("parameters", ""),
                 "details": j.get("details", {})}
@@ -79,6 +79,13 @@ class OllamaProvider:
                 return r.json().get("models", [])
         except Exception:
             return []
+
+    async def chat_once(self, model: str, messages: list[dict], num_ctx: int | None = None, options: dict | None = None, think=None) -> str:
+        """Non-agent call (planning / verification): returns the final content only, thinking text excluded."""
+        out = ""
+        async for chunk in self.chat_stream(model, messages, None, num_ctx, options, think):
+            out += chunk.get("message", {}).get("content", "") or ""
+        return out
 
     async def pull_stream(self, model: str) -> AsyncIterator[dict]:
         """Streams /api/pull progress objects: {status, digest?, total?, completed?} or raises OllamaError."""
@@ -123,12 +130,17 @@ class OllamaProvider:
         except Exception as e:
             raise OllamaError(f"cannot reach Ollama: {str(e) or type(e).__name__}")
 
-    async def chat_stream(self, model: str, messages: list[dict], tools: list[dict] | None, num_ctx: int | None) -> AsyncIterator[dict]:
-        body = {"model": model, "messages": messages, "stream": True, "options": {"temperature": 0.2}}
+    async def chat_stream(self, model: str, messages: list[dict], tools: list[dict] | None, num_ctx: int | None,
+                          options: dict | None = None, think=None) -> AsyncIterator[dict]:
+        """`options`: sampling parameters (temperature, top_p, top_k, ...); `think`: True/False/"low"|"medium"|"high" for
+        models that report the `thinking` capability (never send it to others: Ollama rejects it)."""
+        body = {"model": model, "messages": messages, "stream": True, "options": {"temperature": 0.2, **(options or {})}}
         if tools:
             body["tools"] = tools
         if num_ctx:
             body["options"]["num_ctx"] = num_ctx
+        if think is not None:
+            body["think"] = think
         async with httpx.AsyncClient(base_url=self.base_url, timeout=httpx.Timeout(600.0, connect=5.0)) as c:
             async with c.stream("POST", "/api/chat", json=body) as r:
                 if r.status_code != 200:

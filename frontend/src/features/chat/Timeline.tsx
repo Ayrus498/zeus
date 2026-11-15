@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Check, ChevronDown, ChevronRight, FilePlus, FileEdit, FileSearch, FolderOpen, GitBranch, Loader2, Search, Terminal, Trash2, X, Zap } from "lucide-react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Target, FilePlus, FileEdit, FileSearch, FolderOpen, GitBranch, Loader2, Search, Terminal, Trash2, X, Zap } from "lucide-react";
 import type { TimelineItem } from "../../services/types";
 import { cn } from "../../lib/utils";
 import { Markdown } from "./Markdown";
 import { useApp } from "../../stores/app";
 import { ApprovalCard } from "../permissions/ApprovalCard";
+import { MissionCard } from "./MissionCard";
 import { CodeBox } from "../../components/ui/copy";
 
 const ICONS: Record<string, typeof Terminal> = {
@@ -12,7 +13,7 @@ const ICONS: Record<string, typeof Terminal> = {
   delete_file: Trash2, run_command: Terminal, git_status: GitBranch, git_diff: GitBranch,
 };
 
-function ToolCard({ item }: { item: Extract<TimelineItem, { kind: "tool" }> }) {
+const ToolCard = memo(function ToolCard({ item }: { item: Extract<TimelineItem, { kind: "tool" }> }) {
   const [open, setOpen] = useState(false);
   const Icon = ICONS[item.name] ?? Zap;
   const target = String(item.args.path ?? item.args.command ?? item.args.pattern ?? "");
@@ -38,9 +39,9 @@ function ToolCard({ item }: { item: Extract<TimelineItem, { kind: "tool" }> }) {
       )}
     </div>
   );
-}
+});
 
-function CommandCard({ item }: { item: Extract<TimelineItem, { kind: "command" }> }) {
+const CommandCard = memo(function CommandCard({ item }: { item: Extract<TimelineItem, { kind: "command" }> }) {
   const ref = useRef<HTMLPreElement>(null);
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [item.output]);
   const color = item.status === "running" ? "text-warn" : item.exitCode === 0 ? "text-ok" : "text-danger";
@@ -53,7 +54,7 @@ function CommandCard({ item }: { item: Extract<TimelineItem, { kind: "command" }
       {item.output && <CodeBox text={item.output}><pre ref={ref} className="max-h-60 overflow-auto whitespace-pre-wrap px-3 py-2 font-mono text-[12px] text-muted">{item.output}</pre></CodeBox>}
     </div>
   );
-}
+});
 
 /** Animated "…" that loops . → .. → ... while the agent is working. */
 function Dots() {
@@ -62,22 +63,50 @@ function Dots() {
   return <span className="inline-block w-5 text-left" aria-hidden>{".".repeat(n)}</span>;
 }
 
+/** Pinned to the top of the chat while a mission runs, so progress stays visible after the card scrolls away. */
+function MissionBar() {
+  const m = useApp((s) => [...s.timeline].reverse().find((i) => i.kind === "mission" && (i.status === "running" || i.status === "reviewing")));
+  if (!m || m.kind !== "mission") return null;
+  const met = m.criteria.filter((c) => c.met === true).length;
+  return (
+    <div className="sticky top-0 z-10 -mx-4 flex items-center gap-2 border-b border-accent/30 bg-background/95 px-4 py-1.5 text-[11px] backdrop-blur" data-testid="mission-bar" role="status">
+      <Target size={12} className="shrink-0 text-accent" />
+      <span className="truncate font-medium">{m.title || m.name}</span>
+      <span className="text-muted">round {Math.max(m.round, 1)}/{m.maxRounds} · {met}/{m.criteria.length} criteria met · {m.status === "reviewing" ? "reviewing" : "working"}</span>
+      <Loader2 size={11} className="ml-auto shrink-0 animate-spin text-accent" />
+    </div>
+  );
+}
+
 function WorkingIndicator() {
   const { running, pending } = useApp();
+  const reviewing = useApp((s) => s.timeline.some((i) => i.kind === "mission" && i.status === "reviewing"));
   if (!running) return null;
   const waiting = pending.length > 0;
   return (
     <div className="flex items-center gap-2 py-1 text-sm text-muted" role="status" aria-live="polite" data-testid="working-indicator">
       <Zap size={16} className={cn("text-accent", waiting ? "" : "animate-pulse")} />
-      <span>{waiting ? "Waiting for your approval" : "Thunderstorm is approaching"}<Dots /></span>
+      <span>{waiting ? "Waiting for your approval" : reviewing ? "Reviewing the mission" : "Thunderstorm is approaching"}<Dots /></span>
     </div>
   );
 }
 
 export function Timeline({ items }: { items: TimelineItem[] }) {
-  const end = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);                      // follow the newest content only while the reader is at the bottom
   const pendingCount = useApp((s) => s.pending.length);
-  useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [items, pendingCount]);
+  useEffect(() => {
+    const sc = root.current?.parentElement;
+    if (!sc) return;
+    const f = () => { stick.current = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80; };
+    sc.addEventListener("scroll", f, { passive: true });
+    return () => sc.removeEventListener("scroll", f);
+  }, []);
+  useLayoutEffect(() => {
+    const sc = root.current?.parentElement;
+    if (items[items.length - 1]?.kind === "user") stick.current = true;       // you just sent something: jump down
+    if (sc && stick.current) sc.scrollTop = sc.scrollHeight;                   // instant, no smooth-scroll animation fighting the stream
+  }, [items, pendingCount]);
   if (!items.length) return (
     <div className="grid h-full place-items-center text-center text-muted">
       <div><Zap className="mx-auto mb-2 text-accent" size={28} /><div className="text-foreground">What should we build?</div>
@@ -85,18 +114,20 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
     </div>
   );
   return (
-    <div className="mx-auto max-w-3xl space-y-3 px-4 py-4">
+    <div ref={root} className="mx-auto max-w-3xl space-y-3 px-4 py-4">
+      <MissionBar />
       {items.map((it, i) => {
         if (it.kind === "user") return <div key={i} className="ml-auto w-fit max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-surface-2 px-4 py-2.5">{it.text}</div>;
         if (it.kind === "assistant") return (
           <div key={i}><div className="mb-0.5 text-[11px] font-medium uppercase tracking-wide text-accent">ZEUS</div>
-            <Markdown text={it.text} /></div>);
+            <Markdown text={it.text} streaming={!!it.streaming} /></div>);
         if (it.kind === "route") return (
           <div key={i} className="flex items-start gap-1.5 text-[11px] text-muted" title={it.reason} data-testid="route-note">
             <Zap size={12} className="mt-0.5 shrink-0 text-accent" />
             <span>Auto picked <span className="font-mono text-foreground">{it.model}</span> for {it.role === "think" ? "reasoning" : it.role === "code" ? "coding" : "this follow-up"}
               {it.previous && it.previous !== it.model ? <> (switching from <span className="font-mono">{it.previous}</span>; loading may take a few seconds)</> : null}
               {!it.tools ? " · no tools this turn (reasoning-only model)" : ""}</span></div>);
+        if (it.kind === "mission") return <MissionCard key={`m${it.mid ?? i}`} item={it} />;
         if (it.kind === "tool") return <ToolCard key={i} item={it} />;
         if (it.kind === "command") return <CommandCard key={i} item={it} />;
         return <div key={i} className={cn("flex items-start gap-2 rounded-md px-3 py-2 text-xs", it.level === "error" ? "bg-danger/15 text-danger" : "bg-surface text-muted")}>
@@ -104,7 +135,6 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
       })}
       <ApprovalCard />
       <WorkingIndicator />
-      <div ref={end} />
     </div>
   );
 }
