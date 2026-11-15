@@ -2,6 +2,13 @@
 
 <p align="center"><img src="docs/screenshots/00-hero.png" alt="ZEUS: local AI coding agent for your desktop" width="720"></p>
 
+<p align="center">
+  <a href="https://zeus-agent.web.app/"><b>🌐 Website</b></a> ·
+  <a href="https://github.com/Ayrus498/zeus/releases/tag/v01_00"><b>⬇️ Download (.deb)</b></a> ·
+  <a href="DEVELOPMENT_STATUS.md">Status</a> ·
+  <a href="docs/ARCHITECTURE.md">Architecture</a>
+</p>
+
 **A local, Claude-Code-style coding agent for your desktop, powered by [Ollama](https://ollama.com).**
 Pick a project folder, pick a local model, describe what you want. ZEUS reads, creates, edits and runs code in
 your folder, and every write or command passes through a permission engine you control. Nothing leaves your machine.
@@ -78,6 +85,8 @@ frontend/node_modules/.bin/tauri dev
 ```
 
 ## Build the .deb
+
+Just want to use it? Download the ready-made package from the [website](https://zeus-agent.web.app/) or the [latest release](https://github.com/Ayrus498/zeus/releases/tag/v01_00). To build it yourself:
 
 ```bash
 packaging/build-deb.sh        # runs backend tests, builds the UI, runs `tauri build --bundles deb`
