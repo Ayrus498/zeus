@@ -5,7 +5,7 @@ import type {
   ChangeEntry, Mode, ModelInfo, ModelMeta, OllamaStatus, PermissionRequest, Policy, Project, Session, TimelineItem, Usage, Overview, Toast, Attachment, MissionState,
 } from "../services/types";
 
-export type RightTab = "files" | "changes" | "terminal" | "usage" | "models";
+export type RightTab = "files" | "changes" | "terminal" | "usage";
 export interface OpenFile { path: string; mode: "file" | "diff" }
 
 interface State {
@@ -16,7 +16,7 @@ interface State {
   perms: PermInfo | null;
   timeline: TimelineItem[]; running: boolean; modelState: "idle" | "loading" | "ready"; activeModel: string | null;
   pending: PermissionRequest[]; usage: Usage | null;
-  changes: ChangeEntry[]; treeVersion: number; openFile: OpenFile | null; rightTab: RightTab; settingsOpen: boolean;
+  changes: ChangeEntry[]; treeVersion: number; openFile: OpenFile | null; rightTab: RightTab; settingsOpen: boolean; modelsOpen: boolean;
   overview: Overview | null; toasts: Toast[]; attachment: Attachment | null;
   setAttachment(a: Attachment | null): void; sendMission(o: { note: string; rounds: number; verifier: "same" | "think" }): void;
   refreshOverview(): Promise<void>; pullModel(name: string): Promise<void>; cancelDownload(id: number): Promise<void>;
@@ -29,7 +29,7 @@ interface State {
   setModel(name: string): Promise<void>; setCtx(n: number): Promise<void>;
   sendPrompt(t: string): void; stop(): void; respond(id: string, d: "once" | "session" | "reject"): void;
   setMode(m: Mode, custom?: Record<string, Policy>): Promise<void>;
-  refreshChanges(): Promise<void>; bump(): void; setOpenFile(f: OpenFile | null): void; setRightTab(t: RightTab): void; setSettingsOpen(o: boolean): void;
+  refreshChanges(): Promise<void>; bump(): void; setOpenFile(f: OpenFile | null): void; setRightTab(t: RightTab): void; setSettingsOpen(o: boolean): void; setModelsOpen(o: boolean): void;
   saveSettings(s: Partial<Settings>): Promise<void>; notify(text: string, level?: "info" | "error"): void;
 }
 
@@ -175,7 +175,7 @@ export const useApp = create<State>((set, get) => {
     backendUp: false, error: null, ollama: null, settings: null, models: [], modelMeta: null,
     projects: [], project: null, sessions: [], session: null, allSessions: {}, perms: null,
     timeline: [], running: false, modelState: "idle", activeModel: null, pending: [], usage: null,
-    changes: [], treeVersion: 0, openFile: null, rightTab: "files", settingsOpen: false,
+    changes: [], treeVersion: 0, openFile: null, rightTab: "files", settingsOpen: false, modelsOpen: false,
 
     overview: null, toasts: [], attachment: null,
     setAttachment: (attachment) => set({ attachment }),
@@ -222,6 +222,7 @@ export const useApp = create<State>((set, get) => {
     setOpenFile: (openFile) => set({ openFile }),
     setRightTab: (rightTab) => set({ rightTab }),
     setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+    setModelsOpen: (modelsOpen) => set(modelsOpen ? { modelsOpen, settingsOpen: false } : { modelsOpen }),
 
     async init() {
       if (started) return;

@@ -88,7 +88,7 @@ class AgentEngine:
             return model, True, session
         choice = await self.router.route(text, session.get("last_model")) if self.router else None
         if not choice:
-            await emit({"type": "error", "message": "Auto mode found no chat-capable model. Download one in the Models tab, or pick a model manually."})
+            await emit({"type": "error", "message": "Auto mode found no chat-capable model. Download one in Settings → Models, or pick a model manually."})
             return None
         self.db.x("UPDATE sessions SET last_model=? WHERE id=?", (choice.model, session["id"]))
         await emit({"type": "model_selected", "model": choice.model, "role": choice.role, "tools": choice.tools,

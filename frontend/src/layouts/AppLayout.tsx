@@ -1,4 +1,4 @@
-import { Boxes, Files, GitCompare, Gauge, SquareTerminal } from "lucide-react";
+import { Files, GitCompare, Gauge, SquareTerminal } from "lucide-react";
 import { useEffect } from "react";
 import { ProjectsSidebar } from "../features/projects/ProjectsSidebar";
 import { Timeline } from "../features/chat/Timeline";
@@ -7,7 +7,7 @@ import { PermissionModeSelector } from "../features/permissions/PermissionModeSe
 import { ModelSelector } from "../features/models/ModelSelector";
 import { SettingsDialog } from "../features/models/SettingsDialog";
 import { UsagePanel } from "../features/models/UsagePanel";
-import { ModelsPanel } from "../features/models/ModelsPanel";
+import { ModelsWindow } from "../features/models/ModelsWindow";
 import { ToastHost } from "../features/models/ToastHost";
 import { FileTree } from "../features/file-explorer/FileTree";
 import { ChangesPanel } from "../features/file-explorer/ChangesPanel";
@@ -22,20 +22,20 @@ const LEFT_MIN = 256;    // original sidebar width (w-64)
 const RIGHT_MIN = 440;   // original right pane width
 const CENTER_MIN = 420;  // always keep the conversation usable
 
-const TABS: Array<[RightTab, string, typeof Files]> = [["files", "Files", Files], ["changes", "Changes", GitCompare], ["terminal", "Terminal", SquareTerminal], ["usage", "Usage", Gauge], ["models", "Models", Boxes]];
+const TABS: Array<[RightTab, string, typeof Files]> = [["files", "Files", Files], ["changes", "Changes", GitCompare], ["terminal", "Terminal", SquareTerminal], ["usage", "Usage", Gauge]];
 
 export function AppLayout() {
   const { timeline, rightTab, setRightTab, openFile, changes, backendUp, ollama, project } = useApp();
-  const { overview, refreshOverview } = useApp();
+  const { overview, refreshOverview, modelsOpen, setModelsOpen } = useApp();
   const activeDownloads = overview?.downloads.filter((d) => d.status === "queued" || d.status === "running").length ?? 0;
-  // Poll Ollama state while the Models tab is open or a download is running, so progress and errors are always current.
+  // Poll Ollama state while the Models window is open or a download is running, so progress and errors are always current.
   useEffect(() => {
     if (!backendUp) return;
     void refreshOverview();
-    if (rightTab !== "models" && !activeDownloads) return;
+    if (!modelsOpen && !activeDownloads) return;
     const t = setInterval(() => void refreshOverview(), 1500);
     return () => clearInterval(t);
-  }, [backendUp, rightTab, activeDownloads, refreshOverview]);
+  }, [backendUp, modelsOpen, activeDownloads, refreshOverview]);
   const [leftW, setLeftW] = usePaneWidth("left", LEFT_MIN);
   const [rightW, setRightW] = usePaneWidth("right", RIGHT_MIN);
   const winW = useWindowWidth();
@@ -52,7 +52,7 @@ export function AppLayout() {
         <main className="flex min-w-0 flex-1 flex-col">
           <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2"><ModelSelector /><PermissionModeSelector /></header>
           {!backendUp && <div className="bg-danger/15 px-4 py-2 text-xs text-danger">Cannot reach the ZEUS backend. Retrying…</div>}
-          {backendUp && ollama && !ollama.connected && <div className="bg-warn/10 px-4 py-2 text-xs text-warn">Ollama is not reachable at {ollama.endpoint}. Start it with <span className="font-mono">ollama serve</span> or change the endpoint in Settings. <button className="cursor-pointer underline" onClick={() => setRightTab("models")}>Open the setup guide</button></div>}
+          {backendUp && ollama && !ollama.connected && <div className="bg-warn/10 px-4 py-2 text-xs text-warn">Ollama is not reachable at {ollama.endpoint}. Start it with <span className="font-mono">ollama serve</span> or change the endpoint in Settings. <button className="cursor-pointer underline" onClick={() => setModelsOpen(true)}>Open the setup guide</button></div>}
           {backendUp && !project && <div className="px-4 py-3 text-sm text-muted">Open an existing folder or create a new project from the sidebar to get started.</div>}
           <div className="min-h-0 flex-1 overflow-auto"><Timeline items={timeline} /></div>
           <PromptInput />
@@ -62,15 +62,15 @@ export function AppLayout() {
           <nav className="flex border-b border-border">
             {TABS.map(([id, label, Icon]) => (
               <button key={id} onClick={() => setRightTab(id)} className={cn("flex flex-1 cursor-pointer items-center justify-center gap-1.5 py-2 text-xs", rightTab === id ? "border-b-2 border-accent text-foreground" : "text-muted hover:text-foreground")}>
-                <Icon size={13} />{label}{id === "models" && activeDownloads > 0 && <span className="rounded bg-accent px-1 text-[10px] text-accent-foreground">{activeDownloads}</span>}{id === "changes" && changes.length > 0 && <span className="rounded bg-accent px-1 text-[10px] text-accent-foreground">{changes.length}</span>}</button>))}
+                <Icon size={13} />{label}{id === "changes" && changes.length > 0 && <span className="rounded bg-accent px-1 text-[10px] text-accent-foreground">{changes.length}</span>}</button>))}
           </nav>
           <div className={cn("min-h-0 overflow-auto", openFile ? "h-[38%] shrink-0" : "flex-1")}>
-            {rightTab === "files" && <FileTree />}{rightTab === "changes" && <ChangesPanel />}{rightTab === "terminal" && <TerminalPanel />}{rightTab === "usage" && <UsagePanel />}{rightTab === "models" && <ModelsPanel />}
+            {rightTab === "files" && <FileTree />}{rightTab === "changes" && <ChangesPanel />}{rightTab === "terminal" && <TerminalPanel />}{rightTab === "usage" && <UsagePanel />}
           </div>
           {openFile && <div className="min-h-0 flex-1"><FileViewer /></div>}
         </section>
       </div>
-      <StatusBar /><SettingsDialog /><ToastHost />
+      <StatusBar /><SettingsDialog /><ModelsWindow /><ToastHost />
     </div>
   );
 }

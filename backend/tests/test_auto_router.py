@@ -139,7 +139,7 @@ async def test_engine_reports_clear_error_when_auto_has_no_model(harness, db):
     eng.router = FakeRouter(None)
     await eng.run(h.ctx, s, "hi")
     assert [e["type"] for e in h.events][-2:] == ["error", "run_end"]
-    assert "Models tab" in [e for e in h.events if e["type"] == "error"][0]["message"]
+    assert "Settings → Models" in [e for e in h.events if e["type"] == "error"][0]["message"]
 
 
 async def test_fixed_model_sessions_are_untouched_by_the_router(harness, db):

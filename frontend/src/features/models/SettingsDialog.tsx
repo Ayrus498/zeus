@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
+import { Boxes, ChevronRight } from "lucide-react";
 import { Dialog } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { useApp } from "../../stores/app";
 import { fmtBytes, fmtNum } from "../../lib/utils";
 
 export function SettingsDialog() {
-  const { settingsOpen, setSettingsOpen, settings, saveSettings, ollama, models, modelMeta, session } = useApp();
+  const { settingsOpen, setSettingsOpen, setModelsOpen, settings, saveSettings, ollama, models, modelMeta, session, overview } = useApp();
+  const active = overview?.downloads.filter((d) => d.status === "queued" || d.status === "running").length ?? 0;
   const [url, setUrl] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   useEffect(() => { if (settingsOpen) { setUrl(settings?.ollama_url ?? ""); setMsg(null); } }, [settingsOpen, settings]);
@@ -13,6 +15,14 @@ export function SettingsDialog() {
   return (
     <Dialog open={settingsOpen} onOpenChange={setSettingsOpen} title="Settings" description="Ollama connection and model details">
       <div className="space-y-4 text-sm">
+        <button type="button" onClick={() => setModelsOpen(true)} data-testid="open-models"
+          className="flex w-full cursor-pointer items-center gap-3 rounded-lg border border-border bg-surface-2/50 p-3 text-left outline-none hover:border-accent focus-visible:border-accent">
+          <Boxes size={18} className="shrink-0 text-accent" />
+          <span className="min-w-0 flex-1"><span className="block text-sm font-medium">Models</span>
+            <span className="block text-xs text-muted">Browse model families, download or unload models, and set up Auto mode · {models.length} installed</span></span>
+          {active > 0 && <span className="rounded bg-accent px-1.5 text-[10px] text-accent-foreground" title="Downloads in progress">{active} downloading</span>}
+          <ChevronRight size={16} className="shrink-0 text-muted" />
+        </button>
         <div>
           <label className="mb-1 block text-xs text-muted" htmlFor="ep">Ollama endpoint</label>
           <div className="flex gap-2">

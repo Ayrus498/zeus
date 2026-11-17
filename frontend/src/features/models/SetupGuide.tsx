@@ -30,7 +30,7 @@ export function SetupGuide({ connected, error, endpoint, hasModels }: { connecte
             <div className="mt-1 text-muted">The Linux installer also sets up a service: <span className="font-mono">sudo systemctl enable --now ollama</span></div></li>
           <li><div className="mb-1 font-medium">3. Pull your first model</div>
             <Cmd>{"ollama pull qwen2.5-coder:7b"}</Cmd>
-            <div className="mt-1 text-muted">Or skip this and use the Download buttons in the model guide below.</div></li>
+            <div className="mt-1 text-muted">Or skip this and use the Download buttons next to each model in this window.</div></li>
           <li><div className="mb-1 font-medium">Using Ollama on another machine or port?</div>
             <div className="text-muted">Set the endpoint in Settings (default <span className="font-mono">http://localhost:11434</span>).</div></li>
         </ol>)}

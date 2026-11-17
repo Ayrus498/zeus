@@ -325,7 +325,7 @@ class AutoRouter:
             out["roles"][role] = {**(p.public() if p else {}), "why": why, "tools": bool(p and p.tools)} if p else None
         c, t = picks["code"], picks["think"]
         if not chat:
-            out["warnings"].append("No chat-capable model is installed. Download one in the model guide below.")
+            out["warnings"].append("No chat-capable model is installed. Download one in Settings → Models.")
         elif len(chat) == 1:
             out["warnings"].append("Only one chat model is installed, so Auto always uses it. Add a second (coding or reasoning) model to get switching.")
         if c and t and c.name != t.name and gpu and (c.size + t.size) * 1.1 + 2e9 > gpu:
