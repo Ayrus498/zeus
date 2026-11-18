@@ -1,4 +1,4 @@
-from app import about
+from app import about, config
 
 CPUINFO = """processor\t: 0
 model name\t: AMD Ryzen 7 5800H   with Radeon Graphics
@@ -37,6 +37,6 @@ def test_lspci_gpus():
 
 def test_about_endpoint_shape(client):
     j = client.get("/api/about").json()
-    assert j["name"] == "ZEUS" and j["version"] == "0.1.0" and j["founder"] and j["github"].startswith("https://github.com/")
+    assert j["name"] == "ZEUS" and j["version"] == config.VERSION and j["founder"] and j["github"].startswith("https://github.com/")
     assert set(j) >= {"platform", "cpu", "gpus", "memory"} and isinstance(j["gpus"], list)
     assert j["memory"]["total"] is None or j["memory"]["total"] > 0

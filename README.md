@@ -4,7 +4,8 @@
 
 <p align="center">
   <a href="https://zeus-agent.web.app/"><b>🌐 Website</b></a> ·
-  <a href="https://github.com/Ayrus498/zeus/releases/tag/v01_00"><b>⬇️ Download (.deb)</b></a> ·
+  <a href="https://github.com/Ayrus498/zeus/releases/latest"><b>⬇️ Download (.deb)</b></a> ·
+  <a href="RELEASE_NOTES.md">Release notes</a> ·
   <a href="DEVELOPMENT_STATUS.md">Status</a> ·
   <a href="docs/ARCHITECTURE.md">Architecture</a> ·
   <a href="docs/COMMANDS.md">Terminal commands</a>
@@ -107,11 +108,11 @@ frontend/node_modules/.bin/tauri dev
 
 ## Build the .deb
 
-Just want to use it? Download the ready-made package from the [website](https://zeus-agent.web.app/) or the [latest release](https://github.com/Ayrus498/zeus/releases/tag/v01_00). To build it yourself:
+Just want to use it? Download the ready-made package from the [website](https://zeus-agent.web.app/) or the [latest release](https://github.com/Ayrus498/zeus/releases/latest). To build it yourself:
 
 ```bash
 packaging/build-deb.sh        # runs backend tests, builds the UI, runs `tauri build --bundles deb`
-sudo apt install ./dist/zeus_0.1.0_amd64.deb
+sudo apt install ./dist/zeus_0.2.0_amd64.deb
 ```
 
 Building needs network once (Rust crates, npm packages, and the Python wheels, which `packaging/make-wheelhouse.sh`

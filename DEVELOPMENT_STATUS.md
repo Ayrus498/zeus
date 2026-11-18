@@ -78,7 +78,7 @@ Steps 14–15 (close/reopen, resume) were verified by restarting the backend and
 
 ```bash
 packaging/build-deb.sh     # tests, UI build, cargo fetch (slow-network tolerant), `tauri build --bundles deb`
-sudo apt install ./src-tauri/target/release/bundle/deb/zeus_0.1.0_amd64.deb && zeus
+sudo apt install ./src-tauri/target/release/bundle/deb/zeus_0.2.0_amd64.deb && zeus
 ```
 
 Notes from the first real build:
