@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { api, type PermInfo, type Settings } from "../services/api";
 import { Socket } from "../services/socket";
 import type {
-  ChangeEntry, Mode, ModelInfo, ModelMeta, OllamaStatus, PermissionRequest, Policy, Project, Session, TimelineItem, Usage, Overview, Toast, Attachment, MissionState,
+  ChangeEntry, Mode, ModelInfo, ModelMeta, OllamaStatus, PermissionRequest, Policy, Project, Session, TimelineItem, Usage, Overview, Toast, Attachment, MissionState, SettingsView,
 } from "../services/types";
 
 export type RightTab = "files" | "changes" | "terminal" | "usage";
@@ -16,11 +16,11 @@ interface State {
   perms: PermInfo | null;
   timeline: TimelineItem[]; running: boolean; modelState: "idle" | "loading" | "ready"; activeModel: string | null;
   pending: PermissionRequest[]; usage: Usage | null;
-  changes: ChangeEntry[]; treeVersion: number; openFile: OpenFile | null; rightTab: RightTab; settingsOpen: boolean; modelsOpen: boolean;
+  changes: ChangeEntry[]; treeVersion: number; openFile: OpenFile | null; rightTab: RightTab; settingsOpen: boolean; settingsView: SettingsView; modelsOpen: boolean;
   overview: Overview | null; toasts: Toast[]; attachment: Attachment | null;
   setAttachment(a: Attachment | null): void; sendMission(o: { note: string; rounds: number; verifier: "same" | "think" }): void;
   refreshOverview(): Promise<void>; pullModel(name: string): Promise<void>; cancelDownload(id: number): Promise<void>;
-  dismissDownload(id: number): Promise<void>; unloadModel(name: string): Promise<void>;
+  dismissDownload(id: number): Promise<void>; unloadModel(name: string): Promise<void>; deleteModel(name: string): Promise<boolean>;
   toast(text: string, level?: Toast["level"]): void; dismissToast(id: number): void;
   init(): Promise<void>; refreshOllama(): Promise<void>; refreshModels(): Promise<void>;
   selectProject(id: number): Promise<void>; addProjectFromPicker(): Promise<void>; addProjectPath(p: string): Promise<void>;
@@ -29,7 +29,7 @@ interface State {
   setModel(name: string): Promise<void>; setCtx(n: number): Promise<void>;
   sendPrompt(t: string): void; stop(): void; respond(id: string, d: "once" | "session" | "reject"): void;
   setMode(m: Mode, custom?: Record<string, Policy>): Promise<void>;
-  refreshChanges(): Promise<void>; bump(): void; setOpenFile(f: OpenFile | null): void; setRightTab(t: RightTab): void; setSettingsOpen(o: boolean): void; setModelsOpen(o: boolean): void;
+  refreshChanges(): Promise<void>; bump(): void; setOpenFile(f: OpenFile | null): void; setRightTab(t: RightTab): void; setSettingsOpen(o: boolean): void; openSettings(v: SettingsView): void; setModelsOpen(o: boolean): void;
   saveSettings(s: Partial<Settings>): Promise<void>; notify(text: string, level?: "info" | "error"): void;
 }
 
@@ -175,7 +175,7 @@ export const useApp = create<State>((set, get) => {
     backendUp: false, error: null, ollama: null, settings: null, models: [], modelMeta: null,
     projects: [], project: null, sessions: [], session: null, allSessions: {}, perms: null,
     timeline: [], running: false, modelState: "idle", activeModel: null, pending: [], usage: null,
-    changes: [], treeVersion: 0, openFile: null, rightTab: "files", settingsOpen: false, modelsOpen: false,
+    changes: [], treeVersion: 0, openFile: null, rightTab: "files", settingsOpen: false, settingsView: "endpoint", modelsOpen: false,
 
     overview: null, toasts: [], attachment: null,
     setAttachment: (attachment) => set({ attachment }),
@@ -217,11 +217,18 @@ export const useApp = create<State>((set, get) => {
       catch (e) { get().toast(e instanceof Error ? e.message : String(e), "error"); }
       await get().refreshOverview();
     },
+    async deleteModel(name) {
+      try { await api.deleteModel(name); get().toast(`${name} uninstalled.`, "success"); }
+      catch (e) { get().toast(e instanceof Error ? e.message : String(e), "error"); await get().refreshOverview(); return false; }
+      await Promise.all([get().refreshOverview(), get().refreshModels()]);
+      return true;
+    },
     notify: (text, level = "info") => set((s) => ({ timeline: [...s.timeline, { kind: "notice", level, text }] })),
     bump: () => set((s) => ({ treeVersion: s.treeVersion + 1 })),
     setOpenFile: (openFile) => set({ openFile }),
     setRightTab: (rightTab) => set({ rightTab }),
     setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+    openSettings: (settingsView) => set({ settingsView, settingsOpen: true }),
     setModelsOpen: (modelsOpen) => set(modelsOpen ? { modelsOpen, settingsOpen: false } : { modelsOpen }),
 
     async init() {

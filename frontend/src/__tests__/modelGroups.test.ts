@@ -4,7 +4,7 @@ import type { Catalog, CatalogModel, ModelInfo, Overview } from "../services/typ
 
 const cm = (name: string, title: string, fit: CatalogModel["fit"] = "good", purposes: string[] = ["chat"]): CatalogModel => ({
   name, title, maker: "M", description: `${title} description`, best_for: "x", purposes, capabilities: [], fit, context: null, note: null,
-  url: `https://ollama.com/library/${name}`, tags: [{ tag: `${name}:7b`, size_gb: 4, latest: true }],
+  url: `https://ollama.com/library/${name}`, tags: [{ tag: `${name}:7b`, size_gb: 4, latest: true }], about: `${title} about`, examples: [],
 });
 const CATALOG: Catalog = { purposes: {}, library_url: "", note: "", models: [cm("qwen3", "Qwen3", "best"), cm("qwen3-coder", "Qwen3 Coder", "best", ["coding"]), cm("qwen2.5-coder", "Qwen2.5 Coder", "good"),
   cm("deepseek-r1", "DeepSeek-R1"), cm("llama3.2", "Llama 3.2"), cm("gemma3", "Gemma 3"), cm("nomic-embed-text", "Nomic Embed", "no")] };

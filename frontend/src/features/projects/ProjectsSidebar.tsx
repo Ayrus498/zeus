@@ -1,6 +1,7 @@
 import { ConfirmDialog, type ConfirmRequest } from "../../components/ui/confirm";
 import { useState } from "react";
-import { Check, FolderOpen, FolderPlus, Pencil, Plus, Settings, Trash2, Zap, X } from "lucide-react";
+import { SettingsMenu } from "../models/SettingsMenu";
+import { Check, FolderOpen, FolderPlus, Pencil, Plus, Trash2, Zap, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Dialog } from "../../components/ui/dialog";
 import { useApp } from "../../stores/app";
@@ -31,8 +32,7 @@ function NewProjectDialog({ open, onClose }: { open: boolean; onClose: () => voi
 }
 
 export function ProjectsSidebar() {
-  const { projects, project, sessions, session, selectProject, addProjectFromPicker, removeProject, newSession, selectSession, renameSession, deleteSession, setSettingsOpen, ollama } = useApp();
-  const active = useApp((st) => st.overview?.downloads.filter((d) => d.status === "queued" || d.status === "running").length ?? 0);
+  const { projects, project, sessions, session, selectProject, addProjectFromPicker, removeProject, newSession, selectSession, renameSession, deleteSession, ollama } = useApp();
   const [creating, setCreating] = useState(false);
   const [confirmReq, setConfirmReq] = useState<ConfirmRequest | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
@@ -72,7 +72,7 @@ export function ProjectsSidebar() {
           </div>))}
         {project && !sessions.length && <div className="px-2 py-2 text-xs text-muted">No conversations yet.</div>}
       </div>
-      <div className="border-t border-border p-2"><Button variant="ghost" className="w-full justify-start" onClick={() => setSettingsOpen(true)}><Settings size={15} /> Settings{active > 0 && <span className="ml-auto rounded bg-accent px-1.5 text-[10px] text-accent-foreground" title="Model downloads in progress">{active}</span>}</Button></div>
+      <SettingsMenu />
       <NewProjectDialog open={creating} onClose={() => setCreating(false)} />
       <ConfirmDialog request={confirmReq} onClose={() => setConfirmReq(null)} />
     </aside>

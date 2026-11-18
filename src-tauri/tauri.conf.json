@@ -56,6 +56,9 @@
           "ollama"
         ],
         "section": "devel",
+        "files": {
+          "/usr/bin/zeus-code": "../packaging/zeus-code"
+        },
         "postInstallScript": "../packaging/debian/postinst",
         "preRemoveScript": "../packaging/debian/prerm"
       }

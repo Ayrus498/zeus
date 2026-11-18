@@ -114,6 +114,22 @@ class OllamaProvider:
         except httpx.HTTPError as e:
             raise OllamaError(f"connection to Ollama lost: {str(e) or type(e).__name__}")
 
+    async def delete(self, model: str) -> None:
+        """Remove a model from disk (Ollama DELETE /api/delete). Raises OllamaError with Ollama's message on failure."""
+        try:
+            async with self._client(60.0) as c:
+                r = await c.request("DELETE", "/api/delete", json={"model": model})
+                if r.status_code >= 400:
+                    try:
+                        msg = r.json().get("error", r.text)
+                    except Exception:
+                        msg = r.text
+                    raise OllamaError(msg or f"HTTP {r.status_code}")
+        except OllamaError:
+            raise
+        except Exception as e:
+            raise OllamaError(f"cannot reach Ollama: {str(e) or type(e).__name__}")
+
     async def unload(self, model: str) -> None:
         """Ask Ollama to free the model from memory now (keep_alive=0)."""
         try:

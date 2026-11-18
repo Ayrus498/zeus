@@ -10,7 +10,7 @@ const Cmd = ({ children }: { children: string }) => (
 
 /** Shown when Ollama is not reachable (or has no models yet). */
 export function SetupGuide({ connected, error, endpoint, hasModels }: { connected: boolean; error?: string; endpoint: string; hasModels: boolean }) {
-  const { refreshOverview, refreshOllama, setSettingsOpen } = useApp();
+  const { refreshOverview, refreshOllama, openSettings } = useApp();
   return (
     <div className="rounded-lg border border-warn/40 bg-warn/5 p-3 text-xs" data-testid="setup-guide">
       <div className="mb-1 text-sm font-medium text-warn">{connected ? "No models installed yet" : "Ollama was not detected"}</div>
@@ -36,7 +36,7 @@ export function SetupGuide({ connected, error, endpoint, hasModels }: { connecte
         </ol>)}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={() => { void refreshOverview(); void refreshOllama(); }}><RefreshCw size={12} /> Check again</Button>
-        <Button size="sm" variant="secondary" onClick={() => setSettingsOpen(true)}><Cog size={12} /> Settings</Button>
+        <Button size="sm" variant="secondary" onClick={() => openSettings("endpoint")}><Cog size={12} /> Ollama endpoint</Button>
         <span className="ml-auto flex gap-3 text-muted">
           <ExternalLink href="https://docs.ollama.com">Docs</ExternalLink>
           <ExternalLink href="https://ollama.com/library">Model library</ExternalLink></span>

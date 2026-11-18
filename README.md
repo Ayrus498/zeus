@@ -6,7 +6,8 @@
   <a href="https://zeus-agent.web.app/"><b>🌐 Website</b></a> ·
   <a href="https://github.com/Ayrus498/zeus/releases/tag/v01_00"><b>⬇️ Download (.deb)</b></a> ·
   <a href="DEVELOPMENT_STATUS.md">Status</a> ·
-  <a href="docs/ARCHITECTURE.md">Architecture</a>
+  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
+  <a href="docs/COMMANDS.md">Terminal commands</a>
 </p>
 
 **A local, Claude-Code-style coding agent for your desktop, powered by [Ollama](https://ollama.com).**
@@ -32,7 +33,25 @@ your folder, and every write or command passes through a permission engine you c
   </tr>
 </table>
 
-*Screenshots are from real runs on a demo project (model: `qwen3.5:9b` for the mission, `qwen2.5-coder:7b` for the others).*
+### Terminal UI (`zeus -code`)
+
+<table>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/cli-01-banner.png" alt="zeus -code welcome screen: thunder-bolt icon, session and device information, input box"><br><sub><b>Welcome screen.</b> The ZEUS icon as terminal pixels, with model, context, permissions, project, Ollama status and your CPU, GPU/VRAM, RAM and OS beside it. The input box stays pinned to the bottom.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/cli-03-shell-output.png" alt="/shell output in a green box for a successful command and a red box for a failing one"><br><sub><b>/shell.</b> Every command is one box with its output, exit status and time; green on success, red on failure.</sub></td>
+    <td width="50%"><img src="docs/screenshots/cli-09-agent-run.png" alt="Agent run: permission request, command output box and the answer"><br><sub><b>Agent runs.</b> Approve a command, see its output in a box, then read the answer.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/cli-07-answer-card.png" alt="Answer rendered as a ZEUS card with a highlighted code block"><br><sub><b>Answer cards.</b> The reply is parsed as Markdown; code gets its own box.</sub></td>
+    <td width="50%"><img src="docs/screenshots/cli-05-model-picker.png" alt="/ollama-model: installed models grouped by family with search"><br><sub><b>/ollama-model.</b> Searchable list of installed models.</sub></td>
+  </tr>
+</table>
+
+More screens and every command: [docs/COMMANDS.md](docs/COMMANDS.md).
+
+*Screenshots are from real runs on a demo project (model: `qwen3.5:9b` for the mission, `qwen2.5-coder:7b` for the others). The terminal screenshots are the real `zeus -code` screen captured through a pseudo-terminal and drawn in a window frame.*
 
 ## Features
 
@@ -44,7 +63,9 @@ your folder, and every write or command passes through a permission engine you c
 - **Missions (attach a `.md` file)**: click the paperclip (or drop a Markdown file on the prompt box) and ZEUS reads it as the task, then works in rounds until the result is *verified*: the agent does the work, a strict review pass checks every acceptance criterion against evidence (files written, commands run, exit codes), and anything unmet goes back to the agent. It stops when everything is accepted, when you press Stop, when a round makes no progress, or at the round limit. See [Missions](#missions-attach-a-md-file).
 - **Model-aware prompting**: requests are shaped per model from Ollama's own metadata (tool/thinking capability, the creators' recommended sampling parameters) plus family rules (e.g. DeepSeek-R1 gets instructions in the user turn, thinking is off for fast tool steps on hybrid Qwen3 models, a text tool protocol for models without native tool calling) and the context window is sized to the document.
 - **Auto model mode**: choose "✨ Auto" in the model dropdown and ZEUS picks a coding or a reasoning model for each prompt from the models you have installed (using what it knows about each model, your GPU/RAM and what is already loaded). The pick is explained in the chat; pin your own choice per role in the Models tab, or start a prompt with `/think` or `/code` to force one.
-- **Models window (Settings → Models)**: a searchable window with collapsible families (Qwen, DeepSeek, Llama, Gemma, Mistral…) on the left and details on the right; a curated guide to ~30 well-known Ollama models (what each is best for, how well it suits the ZEUS agent, approximate sizes, whether it fits your GPU/RAM) with **Download** and **Unload** buttons, live download progress, persisted download history and in-page error messages. If Ollama is missing, it shows an install/start guide with links.
+- **Terminal UI (`zeus -code`)**: a Claude-Code-style coding agent right in your terminal. It opens in the folder you start it from, shows the thunder-bolt with your session and device information beside it, and takes prompts with a live slash-command menu: `/settings` (Models, Ollama endpoint, Current model, Installed models, About), `/ollama-model`, `/ollama-ctx`, `/permissions` (read only / approval / trusted), `/project <path>`, `/mission <file>`, `/new`, `/resume`, `/changes`, `/doctor` and more. File changes and commands are approved inline. It shares projects, conversations and permissions with the desktop app. See [Terminal UI](#terminal-ui-zeus--code).
+- **Settings drop-up menu**: Models, Ollama endpoint, Current model, Installed models and About (version, founder, GitHub, platform, CPU, GPU/VRAM, RAM and swap, read from the real machine).
+- **Models window (Settings → Models)**: a searchable window with collapsible families (Qwen, DeepSeek, Llama, Gemma, Mistral…) on the left and details on the right; a curated guide to ~30 well-known Ollama models (what each is best for, how well it suits the ZEUS agent, approximate sizes, whether it fits your GPU/RAM) with a detailed write-up and example prompts for each, the **latest details fetched live from ollama.com** (summary, README, available versions), **Download**, **Unload** and **Uninstall** buttons, live download progress, persisted download history and in-page error messages. If Ollama is missing, it shows an install/start guide with links.
 - **Live Usage tab**: `ollama ps` (loaded models, GPU/CPU split, keep-alive), GPU utilization / VRAM (NVIDIA, AMD), Ollama and system CPU/RAM, with interactive hover charts, plus real token counts from Ollama.
 - **Session memory in `.zeus/` folders**: every conversation (the context sent to Ollama) is mirrored to `<project>/.zeus/sessions/` and settings to `~/.zeus/settings.json`, and reloaded automatically when ZEUS or the project is opened (even after the internal database is lost). See [Where your data lives](#where-your-data-lives).
 - **Persistent sessions** in SQLite, copy buttons on code blocks, streaming terminal with cancel and timeout.
@@ -182,7 +203,7 @@ frontend/     React + TypeScript + Tailwind UI (feature folders under src/featur
 src-tauri/    Tauri 2 desktop shell (spawns/stops the backend) and app icons
 packaging/    build-deb.sh, make-wheelhouse.sh, Debian postinst/prerm
 scripts/      run-backend.sh (dev) and e2e_demo.py (real-model demo)
-docs/         ARCHITECTURE.md
+docs/         ARCHITECTURE.md, COMMANDS.md (zeus -code reference), screenshots
 ```
 
 ## Roadmap
@@ -193,3 +214,36 @@ event stream already carry an `agent` id. Memory, RAG and dashboards are out of 
 ## License
 
 [MIT](LICENSE) © 2026 Ayrus498
+
+## Terminal UI (`zeus -code`)
+
+```bash
+cd ~/my-project
+zeus -code                  # opens in the current folder (also: zeus-code)
+zeus -code ~/other-project  # or give a folder
+zeus -code -m auto --permission-mode trusted
+zeus -code -c               # continue the latest conversation of this folder
+zeus -code -p "explain src/main.py"   # one prompt, print the answer, exit
+```
+
+The welcome screen shows the ZEUS app icon (drawn as terminal pixels, in true colour) on the left and, on the right, the model, context window, permissions, project folder, Ollama status and your CPU, GPU/VRAM, RAM and OS. Type to chat; type `/` for the command menu (arrow keys and Tab). The full command reference with screenshots is in [docs/COMMANDS.md](docs/COMMANDS.md).
+
+<p align="center"><img src="docs/screenshots/cli-01-banner.png" alt="zeus -code welcome screen" width="760"></p>
+
+| Command | What it does |
+| --- | --- |
+| `/settings` | Menu: **Models** (use, download by family with search, manage: use / unload / uninstall, Auto mode), **Ollama endpoint**, **Current model**, **Installed models**, context window, permissions, **About** |
+| `/ollama-model` | Pick from your installed models, grouped by family; type to search (also `/ollama-model qwen3:8b`) |
+| `/ollama-ctx` (alias `/ollama-ctxt`) | Context window: 8K to 128K, the model's maximum, or a custom size (also `/ollama-ctx 32k`) |
+| `/permissions` | **Read only**, **Approval mode** or **Trusted workspace** |
+| `/project [path]` | Change the project folder (default: where you started `zeus -code`); with no path, pick a recent one or type a path with Tab completion |
+| `/mission <file>` | Run a Markdown, Word, PDF... document as a goal-driven mission (non-Markdown is converted with MarkItDown) |
+| `/new`, `/resume` | New conversation, or continue an earlier one |
+| `/changes [file]` | Files ZEUS changed, or the diff of one |
+| `/usage`, `/status`, `/doctor`, `/about`, `/clear`, `/help`, `/exit` | Utilities |
+| `/shell <command>` (or `!command`) | Run a shell command in the project folder and print its output in the message window, e.g. `/shell ls -la` or `/shell git status` (each command runs in its own shell, so `cd` does not stick: use `/project`; Ctrl+C stops it; 2-minute limit) |
+| `/copy` | Copy the last answer or command output to the clipboard |
+
+<p align="center"><img src="docs/screenshots/cli-02-slash-menu.png" alt="The slash-command menu" width="380"> <img src="docs/screenshots/cli-04-permissions.png" alt="/permissions" width="380"></p>
+
+The screen is a chat layout: the message window on top (it scrolls; PageUp/PageDown or the mouse wheel) and the rounded input box pinned to the bottom row, with a status line under it. Everything ZEUS prints appears above the box as organised cards instead of raw text: the model's answer is parsed as Markdown into a titled **ZEUS** card (headings, lists, tables, and code blocks in their own box with the language on the edge; tool-call JSON the model printed is dropped), every command, whether you ran it with `/shell` or the agent did, becomes one box with the command on top, all of its output inside, and the exit status and time on the bottom edge (green on success, red on failure; `git diff` output is colour-highlighted), reads and file edits are one-line rows, and your own messages are shaded bubbles. While something runs you see a live preview above the box; selection lists and the `/` command menu open inside the screen without moving it. You can keep typing while ZEUS works; messages are queued. Because the app captures the mouse for scrolling, select text with Shift+drag or use `/copy`. Keys: Enter sends, Alt+Enter (or a trailing `\`) adds a line, Ctrl+C stops a running answer, Ctrl+D exits. While ZEUS works it shows "Thunderstorm is approaching…"; permission requests appear inline with the diff or command and the choices Yes / Yes for this session / No.

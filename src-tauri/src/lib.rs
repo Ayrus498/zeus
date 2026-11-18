@@ -76,6 +76,43 @@ fn spawn_backend(app: &tauri::AppHandle) -> Option<Child> {
     }
 }
 
+/// Locate the `zeus-code` launcher: $ZEUS_CODE_BIN, next to this executable (/usr/bin/zeus-code), the source checkout
+/// (dev builds), then PATH.
+fn code_launcher() -> PathBuf {
+    if let Ok(p) = std::env::var("ZEUS_CODE_BIN") {
+        return PathBuf::from(p);
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let sib = dir.join("zeus-code");
+            if sib.exists() {
+                return sib;
+            }
+        }
+    }
+    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../packaging/zeus-code");
+    if dev.exists() {
+        return dev;
+    }
+    PathBuf::from("zeus-code")
+}
+
+/// `zeus -code [args]`: hand the terminal over to the Python terminal UI (no window is created).
+#[cfg(unix)]
+pub fn run_code(args: &[String]) -> ! {
+    use std::os::unix::process::CommandExt;
+    let launcher = code_launcher();
+    let err = Command::new(&launcher).args(args).exec(); // only returns on failure
+    eprintln!("zeus: cannot start the terminal UI ({launcher:?}): {err}");
+    std::process::exit(1);
+}
+
+#[cfg(not(unix))]
+pub fn run_code(_args: &[String]) -> ! {
+    eprintln!("zeus -code is only available on Linux and macOS.");
+    std::process::exit(1);
+}
+
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {

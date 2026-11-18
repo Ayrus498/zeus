@@ -37,6 +37,12 @@ export type Fit = "best" | "good" | "limited" | "no";
 export interface CatalogModel {
   name: string; title: string; maker: string; description: string; best_for: string; purposes: string[]; capabilities: string[];
   fit: Fit; context: string | null; note: string | null; url: string; tags: CatalogTag[];
+  about: string; examples: { prompt: string; shows: string }[];
+}
+export interface LibraryInfo {
+  family: string; url: string; summary: string; readme: string; capabilities: string[]; updated: string | null;
+  tags: { tag: string; size: string | null; context: string | null; latest: boolean; kind: string | null; updated: string | null }[];
+  source: "live" | "cache" | "offline-cache" | "offline"; fetched_at?: number; error?: string | null;
 }
 export interface Catalog { purposes: Record<string, string>; library_url: string; models: CatalogModel[]; note: string }
 export interface DownloadRow {
@@ -48,6 +54,14 @@ export interface Overview {
   installed: ModelInfo[]; loaded: LoadedModel[]; downloads: DownloadRow[];
   hardware: { gpu: { total: number; free: number; name: string } | null; ram_total: number | null; ram_available: number | null };
 }
+export interface AboutInfo {
+  name: string; tagline: string; version: string; founder: string; github: string; website: string; license: string;
+  platform: { os: string; kernel: string; arch: string; python: string; ollama: string | null };
+  cpu: { name: string | null; cores: number | null; threads: number | null };
+  gpus: { name: string; vendor: string | null; vram_total: number | null; vram_used: number | null }[];
+  memory: { total: number | null; available: number | null; used: number | null; swap_total: number | null; swap_used: number | null };
+}
+export type SettingsView = "endpoint" | "model" | "installed" | "about";
 export interface Toast { id: number; level: "info" | "error" | "success"; text: string }
 
 export interface AutoRole { name: string; title: string; fit: Fit; capabilities: string[]; size: number; loaded: boolean; purposes: string[]; why: string[]; tools: boolean }

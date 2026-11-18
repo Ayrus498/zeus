@@ -1,4 +1,5 @@
-import { AlertTriangle, Check, Download, Loader2, PowerOff, RotateCw, X } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, Check, Download, Loader2, PowerOff, RotateCw, Trash2, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { CopyButton } from "../../components/ui/copy";
 import { useApp } from "../../stores/app";
@@ -64,6 +65,24 @@ export function Downloads({ rows }: { rows: DownloadRow[] }) {
   );
 }
 
+/* ---------------------------------------------------------------- uninstall */
+/** Two-step uninstall: the first click asks, the second deletes the model files from disk. */
+export function UninstallButton({ name, size }: { name: string; size?: number }) {
+  const { deleteModel, session } = useApp();
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (busy) return <Button size="sm" variant="outline" disabled><Loader2 size={11} className="animate-spin" /> Removing…</Button>;
+  if (!ask) return <Button size="sm" variant="outline" data-testid={`uninstall-${name}`} className="text-danger hover:text-danger" title={`Delete ${name} from this machine`} onClick={() => setAsk(true)}><Trash2 size={11} /> Uninstall</Button>;
+  return (
+    <div className="flex items-center gap-1" role="group" aria-label={`Confirm uninstall ${name}`}>
+      <span className="max-w-[180px] text-[10px] leading-tight text-danger">
+        Delete {size ? fmtBytes(size) : "files"} from disk{session?.model === name ? " (this session uses it)" : ""}?</span>
+      <Button size="sm" variant="danger" data-testid={`confirm-uninstall-${name}`} onClick={async () => { setBusy(true); await deleteModel(name); setBusy(false); setAsk(false); }}>Delete</Button>
+      <Button size="sm" variant="ghost" onClick={() => setAsk(false)}>Cancel</Button>
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------------- installed */
 export function Installed({ ov, catalog }: { ov: Overview; catalog: Catalog | null }) {
   const { unloadModel, setModel, session, project } = useApp();
@@ -88,6 +107,7 @@ export function Installed({ ov, catalog }: { ov: Overview; catalog: Catalog | nu
               {l && <Button size="sm" variant="outline" title="Free this model's memory now" onClick={() => void unloadModel(m.name)}><PowerOff size={11} /> Unload</Button>}
               <Button size="sm" variant="secondary" disabled={!project || notChat || session?.model === m.name}
                 title={!project ? "Open a project first" : notChat ? "Embedding model: cannot chat" : "Use this model for the current session"} onClick={() => void setModel(m.name)}>Use</Button>
+              <UninstallButton name={m.name} size={m.size} />
             </div>);
         })}
       </div>

@@ -21,12 +21,14 @@ from ..permissions.manager import (ACTIONS, DEFAULT_POLICY, MODES, PathViolation
                                    parse_custom, resolve_in_workspace)
 from ..projects.manager import ProjectError, ProjectManager
 from .. import metrics
+from ..about import about as about_info
 from ..convert import service as convert_service
 from ..agent.mission import MAX_DOC_BYTES, MissionRunner
 from ..agent.router import AUTO, AutoRouter, classify, decide
 from ..persistence.zeusdir import ZeusFiles
 from ..providers import catalog as model_catalog
 from ..providers.downloads import DownloadManager
+from ..providers import modelinfo
 from ..providers.ollama import OllamaError, OllamaProvider, context_warning, system_memory
 from ..sessions.manager import SessionManager
 from ..sessions.runtime import SessionRuntime
@@ -90,7 +92,7 @@ class SettingsUpdate(BaseModel):
 
 
 def create_app(db_path=None) -> FastAPI:
-    app = FastAPI(title="ZEUS backend", version="0.1.0")
+    app = FastAPI(title="ZEUS backend", version=config.VERSION)
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
     db = Database(db_path or config.DB_PATH)
     projects, sessions = ProjectManager(db), SessionManager(db)
@@ -138,7 +140,7 @@ def create_app(db_path=None) -> FastAPI:
     # ---------- health / settings / ollama
     @app.get("/api/health")
     async def health():
-        return {"ok": True, "version": "0.1.0"}
+        return {"ok": True, "version": config.VERSION}
 
     @app.get("/api/settings")
     async def get_settings():
@@ -219,6 +221,30 @@ def create_app(db_path=None) -> FastAPI:
         downloads.dismiss(did)
         return {"ok": True}
 
+    @app.get("/api/ollama/library/{family}")
+    async def ollama_library(family: str, refresh: bool = False):
+        """Latest public details (summary, README, tags, capabilities) for a model family from ollama.com."""
+        try:
+            return await modelinfo.fetch(family.lower(), db, force=refresh)
+        except ValueError:
+            raise HTTPException(400, "invalid model family")
+
+    @app.post("/api/ollama/delete")
+    async def ollama_delete(b: ModelReq):
+        """Uninstall a model from disk. Refuses while it is downloading; frees it from memory first."""
+        name = valid_model(b.model)
+        if any(d["model"] == name and d["status"] in ("queued", "running") for d in downloads.list()):
+            raise HTTPException(409, f"{name} is still downloading. Cancel the download first.")
+        try:
+            try:
+                await provider().unload(name)
+            except OllamaError:
+                pass
+            await provider().delete(name)
+        except OllamaError as e:
+            raise HTTPException(502, f"Could not uninstall {name}: {e}")
+        return {"ok": True}
+
     @app.post("/api/ollama/unload")
     async def ollama_unload(b: ModelReq):
         name = valid_model(b.model)
@@ -274,6 +300,12 @@ def create_app(db_path=None) -> FastAPI:
         return {"ok": True}
 
     sampler = metrics.Sampler()
+
+    @app.get("/api/about")
+    async def get_about():
+        """App info plus real device readings (CPU, GPU/VRAM, RAM) for Settings → About."""
+        st = await provider().status()
+        return await asyncio.get_running_loop().run_in_executor(None, about_info, st.get("version") if st["connected"] else None)
 
     @app.get("/api/metrics")
     async def get_metrics():
