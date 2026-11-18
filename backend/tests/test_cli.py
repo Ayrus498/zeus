@@ -407,3 +407,38 @@ def test_copy_falls_back_to_osc52(monkeypatch):
     import base64
     assert sent and sent[0].startswith("\x1b]52;c;") and base64.b64decode(sent[0][7:-1]).decode() == "héllo"
     assert appmod.copy_to_clipboard("x", None) is None
+
+
+def test_ui_turns_fold_to_one_row_and_unfold_on_click():
+    from prompt_toolkit.mouse_events import MouseEvent, MouseEventType, MouseButton, MouseModifier
+    from prompt_toolkit.data_structures import Point
+    from app.cli.cards import user_card
+    from app.cli.ui import LogConsole
+    ui = make_ui()
+    c = LogConsole(ui)
+    c.print("banner")
+    for n in (1, 2):
+        ui.begin_turn(f"prompt {n}")
+        c.print(user_card(f"prompt {n}"))
+        c.print(f"output {n} a\noutput {n} b\noutput {n} c")
+    plain = lambda: "\n".join("".join(t for _, t in r) for r in ui._visible_rows()[0])  # noqa: E731
+    text = plain()
+    assert "▾ prompt 1" in text and "output 1 b" in text and "output 2 c" in text
+    ui.visible_log()
+    head = ui._row_turn.index(1)                               # the row drawn for turn 1's prompt
+    ctl = ui.msg_win.content
+    ev = MouseEvent(position=Point(x=2, y=head), event_type=MouseEventType.MOUSE_UP, button=MouseButton.LEFT, modifiers=frozenset())
+    assert ctl.mouse_handler(ev) is None                       # the click folds turn 1
+    text = plain()
+    assert "▸ prompt 1" in text and "lines hidden" in text
+    assert "output 1" not in text and "output 2 b" in text and "banner" in text   # only that turn folded
+    ui.visible_log()
+    assert ui._row_turn.count(1) == 1                          # one row left for it
+    assert ctl.mouse_handler(MouseEvent(position=Point(x=2, y=ui._row_turn.index(1)), event_type=MouseEventType.MOUSE_UP, button=MouseButton.LEFT, modifiers=frozenset())) is None
+    assert "output 1 b" in plain() and "▾ prompt 1" in plain()      # click again: shown again
+    ui.fold_all(True, keep_last=True)
+    assert "output 1" not in plain() and "output 2 b" in plain()
+    ui.fold_all(False)
+    assert "output 1 b" in plain()
+    ui.clear_log()
+    assert ui.turns == {} and ui.turn_of == []

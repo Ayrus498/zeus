@@ -29,7 +29,7 @@ Requester = Callable[[dict], Awaitable[str]]
 TOOL_SCHEMAS = [
     {"name": "list_files", "description": "List files and directories in a project directory (non-recursive unless recursive=true).",
      "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Relative directory, default '.'"}, "recursive": {"type": "boolean"}}, "required": []}},
-    {"name": "read_file", "description": "Read a text file from the project.",
+    {"name": "read_file", "description": "Read the CONTENTS of a text file from the project (to show or explain it). This does not run it: to run a program or script use run_command.",
      "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}},
     {"name": "search_files", "description": "Search project text files for a regular expression. Returns file:line: match.",
      "parameters": {"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}, "glob": {"type": "string", "description": "e.g. *.py"}}, "required": ["pattern"]}},
@@ -39,7 +39,7 @@ TOOL_SCHEMAS = [
      "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "old_str": {"type": "string"}, "new_str": {"type": "string"}, "reason": {"type": "string"}}, "required": ["path", "old_str", "new_str"]}},
     {"name": "delete_file", "description": "Delete a file. Always requires approval in Approval/Trusted mode.",
      "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "reason": {"type": "string"}}, "required": ["path"]}},
-    {"name": "run_command", "description": "Run a shell command in the project directory (e.g. 'pytest', '.venv/bin/pip install -r requirements.txt'). Output is returned.",
+    {"name": "run_command", "description": "Run a shell command in the project directory and return its output. Use this to EXECUTE programs when the user says run/execute/launch (e.g. './swap.out', './build.sh', 'python3 main.py', 'pytest', '.venv/bin/pip install -r requirements.txt'). Do not use cat to 'run' a file.",
      "parameters": {"type": "object", "properties": {"command": {"type": "string"}, "reason": {"type": "string"}}, "required": ["command"]}},
     {"name": "git_status", "description": "Show git status (porcelain) of the project.", "parameters": {"type": "object", "properties": {}, "required": []}},
     {"name": "git_diff", "description": "Show git diff of uncommitted changes, optionally for one path.",

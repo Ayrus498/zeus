@@ -51,6 +51,7 @@ Type `/` to open the live command menu (arrow keys and Tab).
 | `/changes [file]` (alias `/diff`) | Files ZEUS changed, or the diff of one |
 | `/usage`, `/status`, `/doctor`, `/about` | Usage, session state, environment check, version and machine |
 | `/copy` | Copy the last answer or command output to the clipboard |
+| `/fold` (alias `/collapse`), `/unfold` (alias `/expand`) | Fold every earlier prompt to one row, or open them all again |
 | `/clear` | Clear the message window |
 | `/exit` (aliases `/quit`, `/q`) | Leave |
 
@@ -91,6 +92,16 @@ In approval mode every file write and command stops and shows the diff or the ex
 
 ![An agent run: the approved command's output box and the final answer](screenshots/cli-09-agent-run.png)
 
+## Fold and unfold a prompt
+
+Every prompt you send (and every `/shell` command) starts a block, and its first row carries an arrow. Click the
+row to hide that prompt's output (the shell box, the model's answer, the approval); it collapses to a single
+line, `▸ your prompt · N lines hidden · click to open`. Click it again to bring everything back (`▾`). `/fold`
+folds all earlier prompts at once and `/unfold` opens them all. Folded blocks stay folded while new output
+arrives, and `/clear` removes them. Mouse clicks need a terminal with mouse reporting (most have it).
+
+![The first command folded to one row, the second still open](screenshots/cli-11-fold.png)
+
 ## Usage
 
 `/usage` shows the loaded models and the GPU, VRAM, CPU and RAM use.
@@ -106,6 +117,7 @@ In approval mode every file write and command stops and shows the diff or the ex
 | PageUp / PageDown, mouse wheel | Scroll the message window |
 | Ctrl+C | Stop a running answer or command |
 | Ctrl+D | Exit |
+| Click a `▾` / `▸` row | Fold or unfold that prompt and its output |
 | Shift+drag | Select text (the app captures the mouse for scrolling); or use `/copy` |
 
 You can keep typing while ZEUS works; messages are queued.

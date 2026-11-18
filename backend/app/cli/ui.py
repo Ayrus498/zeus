@@ -117,6 +117,12 @@ class _LogControl(FormattedTextControl):
         if mouse_event.event_type == MouseEventType.SCROLL_DOWN:
             self.ui.scroll_by(-WHEEL_STEP)
             return None
+        if mouse_event.event_type == MouseEventType.MOUSE_UP:        # a click on a prompt row folds or unfolds its output
+            y = mouse_event.position.y
+            tid = self.ui._row_turn[y] if 0 <= y < len(self.ui._row_turn) else 0
+            if tid:
+                self.ui.toggle_turn(tid)
+                return None
         return NotImplemented
 
 
@@ -135,6 +141,10 @@ class FullUI:
         self.on_submit, self.on_ctrl_c, self.on_eof = on_submit, on_ctrl_c, on_eof
         self.placeholder = placeholder or random.choice(PLACEHOLDERS)
         self.log: list[FormattedText] = []
+        self.turn_of: list[int] = []          # turn id of every log line (0 = not part of a turn), same length as log
+        self.turns: dict[int, dict] = {}      # id -> {"collapsed": bool, "title": str}
+        self.cur_turn = 0
+        self._row_turn: list[int] = []        # turn id of every row currently drawn (non-zero on a turn's header row)
         self.scroll = 0                       # lines scrolled back from the bottom (0 = follow the newest output)
         self.live, self.live_glyph, self.live_max = "", "⚡ ", 6
         self.dialog: _Dialog | None = None
@@ -194,16 +204,85 @@ class FullUI:
     def append_ansi(self, lines: list[str]) -> None:
         for ln in lines:
             self.log.append(FormattedText(to_formatted_text(ANSI(ln))))
+            self.turn_of.append(self.cur_turn)
         if len(self.log) > MAX_LOG_LINES:
-            del self.log[: len(self.log) - MAX_LOG_LINES]
+            n = len(self.log) - MAX_LOG_LINES
+            del self.log[:n], self.turn_of[:n]
+            self.turns = {t: v for t, v in self.turns.items() if t in set(self.turn_of)}
         if self.scroll:
             self.scroll += len(lines)         # keep the lines being read in place while new output arrives below
         self._invalidate()
 
     def clear_log(self) -> None:
         self.log.clear()
+        self.turn_of.clear()
+        self.turns.clear()
+        self.cur_turn = 0
         self.scroll = 0
         self._invalidate()
+
+    # ------------------------------------------------------------------ foldable turns
+    def begin_turn(self, title: str) -> int:
+        """Everything printed from now until the next begin_turn belongs to one prompt and can be folded under its first row."""
+        self.cur_turn = max(self.turns, default=0) + 1
+        self.turns[self.cur_turn] = {"collapsed": False, "title": title}
+        return self.cur_turn
+
+    def toggle_turn(self, tid: int, collapsed: bool | None = None) -> None:
+        t = self.turns.get(tid)
+        if t is not None:
+            t["collapsed"] = (not t["collapsed"]) if collapsed is None else collapsed
+            self._invalidate()
+
+    def fold_all(self, collapsed: bool, keep_last: bool = False) -> int:
+        ids = sorted(self.turns)
+        for tid in ids[:-1] if (keep_last and collapsed) else ids:
+            self.turns[tid]["collapsed"] = collapsed
+        self._invalidate()
+        return len(ids)
+
+    def _header_row(self, ln: FormattedText, tid: int, hidden: int) -> FormattedText:
+        """The first line of a turn with its arrow: ▾ when open; ▸, the one-line prompt and the hidden line count when folded."""
+        t = self.turns[tid]
+        frags = [(s, x) for s, x, *_ in ln]
+        arrow = "▸" if t["collapsed"] else "▾"
+        if not t["collapsed"]:
+            done = False
+            out = []
+            for s, x in frags:
+                if not done and "❯" in x:
+                    x, done = x.replace("❯", arrow, 1), True
+                out.append((s, x))
+            return FormattedText(out)
+        style = next((s for s, x in frags if x.strip() and "❯" not in x), frags[-1][0] if frags else "")
+        extra = f"  ▸ {hidden} line{'s' if hidden != 1 else ''} hidden · click to open" if hidden else "  · click to open"
+        width = max(20, self.cols() - 2 - len(extra))
+        title = " ".join(t["title"].split())
+        title = title if len(title) <= width else title[: width - 1] + "…"
+        pad = " " * max(0, self.cols() - 3 - len(title) - len(extra))
+        return FormattedText([(style, f" {arrow} "), (style, title), (f"{style} nobold", extra + pad)])
+
+    def _visible_rows(self) -> tuple[list[FormattedText], list[int]]:
+        """The log as drawn: folded turns collapse to their header row."""
+        if not self.turns:
+            return list(self.log), [0] * len(self.log)
+        counts: dict[int, int] = {}
+        for t in self.turn_of:
+            if t:
+                counts[t] = counts.get(t, 0) + 1
+        rows: list[FormattedText] = []
+        meta: list[int] = []
+        seen: set[int] = set()
+        for ln, t in zip(self.log, self.turn_of):
+            tr = self.turns.get(t) if t else None
+            if tr is None:
+                rows.append(ln); meta.append(0)
+            elif t not in seen:
+                seen.add(t)
+                rows.append(self._header_row(ln, t, counts[t] - 1)); meta.append(t)
+            elif not tr["collapsed"]:
+                rows.append(ln); meta.append(0)
+        return rows, meta
 
     def set_live(self, text: str, glyph: str = "⚡ ", max_rows: int = 6) -> None:
         """Preview of what is being produced right now (the model's text, a running command): the last few rows, dimmed.
@@ -238,14 +317,17 @@ class FullUI:
 
     def visible_log(self) -> FormattedText:
         live = self._live_rows()
-        total = len(self.log) + len(live)
+        rows, meta = self._visible_rows()
+        total = len(rows) + len(live)
         h = self._height()
         self.scroll = min(self.scroll, max(0, total - h))
         end = total - self.scroll
         start = max(0, end - (h - 1 if self.scroll else h))      # one row is kept for the "more lines below" notice
         out: list[tuple[str, str]] = []
+        self._row_turn = []
         for i in range(start, end):
-            out.extend(self.log[i] if i < len(self.log) else live[i - len(self.log)])
+            out.extend(rows[i] if i < len(rows) else live[i - len(rows)])
+            self._row_turn.append(meta[i] if i < len(rows) else 0)
             if i < end - 1:
                 out.append(("", "\n"))
         if self.scroll:

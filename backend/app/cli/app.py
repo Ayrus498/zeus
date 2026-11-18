@@ -56,6 +56,8 @@ COMMANDS: dict[str, tuple[tuple[str, ...], str]] = {
     "doctor": ((), "Check Ollama, the backend and the selected model"),
     "about": ((), "Version, founder, GitHub, device information"),
     "copy": ((), "Copy the last answer or command output to the clipboard"),
+    "fold": (("collapse",), "Fold all earlier prompts to one line each (click a ▾ row to fold or unfold one)"),
+    "unfold": (("expand",), "Unfold every prompt and its output"),
     "clear": ((), "Clear the screen"),
     "exit": (("quit", "q"), "Leave ZEUS"),
 }
@@ -268,6 +270,17 @@ class Cli:
     async def cmd_status(self, arg):
         await self.refresh()
         self.show_banner()
+
+    async def cmd_fold(self, arg):
+        if self.ui is None or not self.ui.turns:
+            self.c.print(Text("  Nothing to fold yet.", style=DIM))
+            return
+        n = self.ui.fold_all(True, keep_last=True)
+        self.c.print(Text(f"  ▸ folded {max(0, n - 1)} earlier prompt(s). Click a row (or /unfold) to open them again.", style=DIM))
+
+    async def cmd_unfold(self, arg):
+        if self.ui is not None:
+            self.ui.fold_all(False)
 
     async def cmd_clear(self, arg):
         if self.ui is None:
@@ -847,6 +860,8 @@ class Cli:
 
     def echo(self, text: str):
         """What the user sent, as a shaded bubble in the message window."""
+        if self.ui:
+            self.ui.begin_turn(text.splitlines()[0] if text.splitlines() else text)
         self.c.print(user_card(text))
 
 

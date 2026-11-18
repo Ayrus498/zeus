@@ -243,6 +243,7 @@ The welcome screen shows the ZEUS app icon (drawn as terminal pixels, in true co
 | `/usage`, `/status`, `/doctor`, `/about`, `/clear`, `/help`, `/exit` | Utilities |
 | `/shell <command>` (or `!command`) | Run a shell command in the project folder and print its output in the message window, e.g. `/shell ls -la` or `/shell git status` (each command runs in its own shell, so `cd` does not stick: use `/project`; Ctrl+C stops it; 2-minute limit) |
 | `/copy` | Copy the last answer or command output to the clipboard |
+| `/fold`, `/unfold` | Fold every earlier prompt to one row / open them all (or click a `▾` / `▸` row to fold just that prompt and its output) |
 
 <p align="center"><img src="docs/screenshots/cli-02-slash-menu.png" alt="The slash-command menu" width="380"> <img src="docs/screenshots/cli-04-permissions.png" alt="/permissions" width="380"></p>
 
