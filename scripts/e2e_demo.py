@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Real end-to-end demo against a running ZEUS backend and a real Ollama model (no mocks).
+"""Real end-to-end demo against a running Zeus-Agent backend and a real Ollama model (no mocks).
 
 An auto-approver stands in for the human clicking "Approve"; every request is printed.
 Usage: e2e_demo.py [--model qwen2.5-coder:7b] [--parent /tmp/dir] [--name zeus-notes] [--url http://127.0.0.1:8765]

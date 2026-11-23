@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AlertTriangle, Check, ChevronDown, ChevronRight, Target, FilePlus, FileEdit, FileSearch, FolderOpen, GitBranch, Loader2, Search, Terminal, Trash2, X, Zap } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Target, FilePlus, FileEdit, FileSearch, FolderOpen, GitBranch, ArrowDown, Loader2, Search, Terminal, Trash2, X, Zap } from "lucide-react";
 import type { TimelineItem } from "../../services/types";
 import { cn } from "../../lib/utils";
 import { Markdown } from "./Markdown";
@@ -7,6 +7,7 @@ import { useApp } from "../../stores/app";
 import { ApprovalCard } from "../permissions/ApprovalCard";
 import { MissionCard } from "./MissionCard";
 import { CodeBox } from "../../components/ui/copy";
+import { useStickScroll } from "../../hooks/useStickScroll";
 
 const ICONS: Record<string, typeof Terminal> = {
   list_files: FolderOpen, read_file: FileSearch, search_files: Search, create_file: FilePlus, edit_file: FileEdit,
@@ -43,7 +44,7 @@ const ToolCard = memo(function ToolCard({ item }: { item: Extract<TimelineItem, 
 
 const CommandCard = memo(function CommandCard({ item }: { item: Extract<TimelineItem, { kind: "command" }> }) {
   const ref = useRef<HTMLPreElement>(null);
-  useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [item.output]);
+  useStickScroll(() => ref.current, item.output, !!item.output);          // follows the output, but lets you scroll up while it runs
   const color = item.status === "running" ? "text-warn" : item.exitCode === 0 ? "text-ok" : "text-danger";
   return (
     <div className="my-1.5 rounded-lg border border-border bg-[#0d1117]">
@@ -93,24 +94,14 @@ function WorkingIndicator() {
 
 export function Timeline({ items }: { items: TimelineItem[] }) {
   const root = useRef<HTMLDivElement>(null);
-  const stick = useRef(true);                      // follow the newest content only while the reader is at the bottom
   const pendingCount = useApp((s) => s.pending.length);
-  useEffect(() => {
-    const sc = root.current?.parentElement;
-    if (!sc) return;
-    const f = () => { stick.current = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80; };
-    sc.addEventListener("scroll", f, { passive: true });
-    return () => sc.removeEventListener("scroll", f);
-  }, []);
-  useLayoutEffect(() => {
-    const sc = root.current?.parentElement;
-    if (items[items.length - 1]?.kind === "user") stick.current = true;       // you just sent something: jump down
-    if (sc && stick.current) sc.scrollTop = sc.scrollHeight;                   // instant, no smooth-scroll animation fighting the stream
-  }, [items, pendingCount]);
+  // Follow the newest content only while the reader is at the bottom; scrolling up while Zeus-Agent writes stays where you put it.
+  const { following, jump } = useStickScroll(() => root.current?.parentElement, [items, pendingCount], items.length > 0);
+  useLayoutEffect(() => { if (items[items.length - 1]?.kind === "user") jump(); }, [items, jump]);     // you just sent something: go down
   if (!items.length) return (
     <div className="grid h-full place-items-center text-center text-muted">
       <div><Zap className="mx-auto mb-2 text-accent" size={28} /><div className="text-foreground">What should we build?</div>
-        <div className="mt-1 text-xs">ZEUS reads, edits and runs code in your project — with your approval.</div></div>
+        <div className="mt-1 text-xs">Zeus-Agent reads, edits and runs code in your project — with your approval.</div></div>
     </div>
   );
   return (
@@ -119,7 +110,7 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
       {items.map((it, i) => {
         if (it.kind === "user") return <div key={i} className="ml-auto w-fit max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-surface-2 px-4 py-2.5">{it.text}</div>;
         if (it.kind === "assistant") return (
-          <div key={i}><div className="mb-0.5 text-[11px] font-medium uppercase tracking-wide text-accent">ZEUS</div>
+          <div key={i}><div className="mb-0.5 text-[11px] font-medium uppercase tracking-wide text-accent">Zeus-Agent</div>
             <Markdown text={it.text} streaming={!!it.streaming} /></div>);
         if (it.kind === "route") return (
           <div key={i} className="flex items-start gap-1.5 text-[11px] text-muted" title={it.reason} data-testid="route-note">
@@ -135,6 +126,14 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
       })}
       <ApprovalCard />
       <WorkingIndicator />
+      {!following && (
+        <div className="pointer-events-none sticky bottom-2 flex justify-center">
+          <button type="button" onClick={jump} data-testid="jump-latest"
+            className="pointer-events-auto flex cursor-pointer items-center gap-1 rounded-full border border-border bg-surface px-3 py-1 text-xs text-foreground shadow-lg hover:bg-surface-2">
+            <ArrowDown size={12} /> Jump to latest
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -35,7 +35,7 @@ export function SettingsMenu() {
     { id: "endpoint", icon: Link2, label: "Ollama endpoint", hint: ollama?.connected ? `Connected · Ollama ${ollama.version ?? ""}` : "Not connected", run: view("endpoint") },
     { id: "model", icon: Sparkles, label: "Current model", hint: session?.model ?? "No session open", run: view("model") },
     { id: "installed", icon: Package, label: "Installed models", hint: `${models.length} installed`, run: view("installed") },
-    { id: "about", icon: Info, label: "About ZEUS", hint: "Version, device and memory", run: view("about") },
+    { id: "about", icon: Info, label: "About Zeus-Agent", hint: "Version, device and memory", run: view("about") },
   ];
   return (
     <div ref={root} className="relative border-t border-border p-2">

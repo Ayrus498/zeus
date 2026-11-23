@@ -1,4 +1,4 @@
-# ZEUS architecture (Phase 1)
+# Zeus-Agent architecture (Phase 1)
 
 ## Components
 
@@ -71,7 +71,7 @@ Small local models sometimes print a whole file in chat instead of calling `crea
 Three layers handle this (all in `backend/app/agent/`):
 1. `toolparse.lenient_file_call` recovers a `create_file` call whose JSON is almost valid (e.g. one unescaped quote in a 16 KB string).
 2. `engine.py` retries up to twice when a reply *looks like* a tool call but cannot be parsed, telling the model what was wrong (the garbage is not kept in history).
-3. `rescue.find_printed_file` - if the user clearly asked for a file and the reply is exactly one large code block with no file written, ZEUS issues a normal
+3. `rescue.find_printed_file` - if the user clearly asked for a file and the reply is exactly one large code block with no file written, Zeus-Agent issues a normal
    `create_file` call for it. It goes through the permission engine like any write (approval card with diff, never overwrites).
 In the UI every finished code block also has a "Save as file" button (`POST /api/projects/{id}/files`): the click is the user's explicit action; the same path
 rules apply (inside the project, not `.zeus`, blocked in read-only mode, no silent overwrite).
@@ -82,7 +82,7 @@ rules apply (inside the project, not `.zeus`, blocked in read-only mode, no sile
 `backend/app/agent/mission.py` (`MissionRunner`) turns an attached Markdown document into a verified objective. The WebSocket message
 `{"type":"mission","name","content","note","max_rounds","verifier"}` starts it (`start_mission` in `api/main.py`; `.md` only, <= 200 KB).
 Per round: `AgentEngine.loop()` (the same tool loop used for normal prompts, now reusable and returning a status) -> `build_evidence()` -> a reviewer call
-(`provider.chat_once`, model chosen like the worker unless the user asks for the reasoning model) returning per-criterion JSON -> `read_verdict()` (ZEUS computes
+(`provider.chat_once`, model chosen like the worker unless the user asks for the reasoning model) returning per-criterion JSON -> `read_verdict()` (Zeus-Agent computes
 `accepted` itself) -> `hard_checks()` (exit codes and files on disk overrule the reviewer) -> feedback appended as a user message and the next round.
 Stop conditions: accepted, user stop, stalled (same unmet criteria and no new file/command activity), round limit. State lives in the `missions` table
 (mirrored into the session's `.zeus` file); events: `mission_start/round/verifying/check/end`.

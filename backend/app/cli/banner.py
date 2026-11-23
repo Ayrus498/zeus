@@ -61,7 +61,7 @@ def banner(st: dict, about: dict | None, width: int, color: bool = True) -> Rend
     """Side-by-side when the terminal is wide enough, stacked otherwise."""
     version = (about or {}).get("version") or st.get("version") or ""
     mark = logo_text() if color else Text("\n".join(BOLT), style=f"bold {PURPLE}")
-    left = Group(mark, Text(""), Text("ZEUS", style=f"bold {PURPLE}"), Text("local coding agent", style=DIM),
+    left = Group(mark, Text(""), Text("Zeus-Agent", style=f"bold {PURPLE}"), Text("local coding agent", style=DIM),
                  Text("powered by Ollama", style=DIM))
     right = info_panel(st, about)
     if width >= 96:
@@ -74,13 +74,13 @@ def banner(st: dict, about: dict | None, width: int, color: bool = True) -> Rend
         body: RenderableType = grid
     else:
         body = Group(Text.assemble(mark), Text(""), right)
-    return Panel(body, title=Text(f" ZEUS {('v' + version) if version else ''} ", style=f"bold {PURPLE}"), title_align="left",
+    return Panel(body, title=Text(f" Zeus-Agent {('v' + version) if version else ''} ", style=f"bold {PURPLE}"), title_align="left",
                  border_style=PURPLE_DEEP, box=box.ROUNDED, padding=(1, 2))
 
 
 TIPS = [
     ("/help", "all commands"), ("/settings", "models, endpoint, about"), ("/ollama-model", "switch model"),
-    ("/ollama-ctx", "context size"), ("/permissions", "what ZEUS may do"), ("/project", "change folder"), ("/shell ls", "run a command here"),
+    ("/ollama-ctx", "context size"), ("/permissions", "what Zeus-Agent may do"), ("/project", "change folder"), ("/shell ls", "run a command here"),
 ]
 
 

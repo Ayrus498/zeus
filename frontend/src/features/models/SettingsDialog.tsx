@@ -9,10 +9,10 @@ import { fmtBytes, fmtNum } from "../../lib/utils";
 import type { AboutInfo, SettingsView } from "../../services/types";
 
 const TITLES: Record<SettingsView, { title: string; description: string }> = {
-  endpoint: { title: "Ollama endpoint", description: "Where ZEUS reaches Ollama" },
+  endpoint: { title: "Ollama endpoint", description: "Where Zeus-Agent reaches Ollama" },
   model: { title: "Current model", description: "Details of the model used by this session" },
   installed: { title: "Installed models", description: "Models available on this machine" },
-  about: { title: "About ZEUS", description: "Version, platform and device information" },
+  about: { title: "About Zeus-Agent", description: "Version, platform and device information" },
 };
 
 function Row({ k, v, mono }: { k: string; v: React.ReactNode; mono?: boolean }) {
@@ -46,9 +46,9 @@ function Endpoint() {
           {msg && <span className="ml-2 text-muted">{msg}</span>}</div>
       </div>
       <div className="rounded-md border border-border bg-surface-2/50 p-3 text-xs" data-testid="storage-info">
-        <div className="mb-1 font-medium">Where ZEUS keeps your data</div>
+        <div className="mb-1 font-medium">Where Zeus-Agent keeps your data</div>
         <div className="text-muted">Conversation history (the context sent to Ollama) is saved in each project's <span className="font-mono text-foreground">.zeus/</span> folder, and settings in <span className="font-mono text-foreground">{settings?.home ?? "~"}/.zeus/</span>.
-          They are reloaded automatically when ZEUS or the project is opened, even if its internal database is lost. The project's <span className="font-mono">.zeus/</span> is git-ignored by default.</div>
+          They are reloaded automatically when Zeus-Agent or the project is opened, even if its internal database is lost. The project's <span className="font-mono">.zeus/</span> is git-ignored by default.</div>
       </div>
     </div>
   );
@@ -58,7 +58,7 @@ function CurrentModel() {
   const { session, modelMeta, models, overview } = useApp();
   const name = session?.model;
   if (!name) return <div className="text-sm text-muted" data-testid="current-model">No session is open. Open a project and a session to see its model.</div>;
-  if (name === "auto") return <div className="text-sm" data-testid="current-model">This session uses <b>Auto</b> mode: ZEUS picks a coding or thinking model for each prompt. Open <b>Models</b> to see what Auto would use right now.</div>;
+  if (name === "auto") return <div className="text-sm" data-testid="current-model">This session uses <b>Auto</b> mode: Zeus-Agent picks a coding or thinking model for each prompt. Open <b>Models</b> to see what Auto would use right now.</div>;
   const info = models.find((m) => m.name === name);
   const loaded = overview?.loaded.find((l) => l.name === name);
   return (

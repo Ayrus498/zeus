@@ -27,7 +27,7 @@ export function ModelSelector() {
       </Select>
       {isAuto && (
         <span className="flex max-w-[260px] items-center gap-1 truncate rounded-md bg-accent/15 px-2 py-1 text-[11px] text-accent" data-testid="auto-active"
-          title="Auto mode: ZEUS picks a coding or a reasoning model for each prompt from your installed models. Type /think or /code at the start of a prompt to force one. See Settings → Models for details.">
+          title="Auto mode: Zeus-Agent picks a coding or a reasoning model for each prompt from your installed models. Type /think or /code at the start of a prompt to force one. See Settings → Models for details.">
           {activeModel ? <>now: <span className="truncate font-mono">{activeModel}</span></> : "picks per prompt"}</span>)}
       <Select aria-label="Context window" value={isMaxSel ? "max" : String(ctx)} disabled={!session} onChange={(e) => void setCtx(e.target.value === "max" ? (max ?? ctx) : Number(e.target.value))}>
         {options.map((p) => <option key={p} value={p}>{fmtCtx(p)} ctx</option>)}
@@ -35,7 +35,7 @@ export function ModelSelector() {
         {max && <option value="max">Max supported ({fmtCtx(max)})</option>}
       </Select>
       {custom && null}
-      {modelMeta?.tools_supported === false && <span className="flex items-center gap-1 text-xs text-warn" title="This model does not advertise tool support; ZEUS will try JSON tool calls as text."><TriangleAlert size={13} />no native tools</span>}
+      {modelMeta?.tools_supported === false && <span className="flex items-center gap-1 text-xs text-warn" title="This model does not advertise tool support; Zeus-Agent will try JSON tool calls as text."><TriangleAlert size={13} />no native tools</span>}
       {modelMeta?.context_check?.warning && <span className="flex items-center gap-1 text-xs text-warn" title={modelMeta.context_check.warning}><TriangleAlert size={13} />memory (estimate)</span>}
     </div>
   );

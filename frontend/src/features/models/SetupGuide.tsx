@@ -16,7 +16,7 @@ export function SetupGuide({ connected, error, endpoint, hasModels }: { connecte
       <div className="mb-1 text-sm font-medium text-warn">{connected ? "No models installed yet" : "Ollama was not detected"}</div>
       <p className="mb-2 text-muted">
         {connected ? "Ollama is running, but nothing is installed. Pick a model from the guide below and press Download, or use step 3."
-          : <>ZEUS could not reach Ollama at <span className="font-mono">{endpoint}</span>.{error ? <> <span className="font-mono text-danger/90">({error})</span></> : null} Follow these steps, then press <b>Check again</b>.</>}
+          : <>Zeus-Agent could not reach Ollama at <span className="font-mono">{endpoint}</span>.{error ? <> <span className="font-mono text-danger/90">({error})</span></> : null} Follow these steps, then press <b>Check again</b>.</>}
       </p>
       {!connected && (
         <ol className="space-y-2.5">
@@ -41,7 +41,7 @@ export function SetupGuide({ connected, error, endpoint, hasModels }: { connecte
           <ExternalLink href="https://docs.ollama.com">Docs</ExternalLink>
           <ExternalLink href="https://ollama.com/library">Model library</ExternalLink></span>
       </div>
-      {!hasModels && connected && <div className="mt-2 text-muted">Tip: for ZEUS pick a model marked <b>Best for ZEUS</b>.</div>}
+      {!hasModels && connected && <div className="mt-2 text-muted">Tip: for Zeus-Agent pick a model marked <b>Best for Zeus-Agent</b>.</div>}
     </div>
   );
 }

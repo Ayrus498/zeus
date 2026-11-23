@@ -2,7 +2,7 @@
 
 How it decides (deliberately simple and explainable - every decision comes with a human-readable reason):
   1. classify(prompt): rule-based intent -> "code" | "think" | "keep" (short follow-ups keep the previous model)
-  2. pick(role, candidates): score installed chat-capable models using what ZEUS knows about each family
+  2. pick(role, candidates): score installed chat-capable models using what Zeus-Agent knows about each family
      (providers/catalog.py), Ollama's own capability flags (/api/show), whether it fits this machine's GPU/RAM,
      and whether it is already loaded (a model swap costs seconds to a minute).
 The choice is made once per prompt and kept for every step of that agent run (no mid-run swapping).
@@ -86,7 +86,7 @@ class Profile:
     family: str | None
     title: str
     purposes: set[str]
-    fit: str                          # best|good|limited|no  (for the ZEUS agent)
+    fit: str                          # best|good|limited|no  (for the Zeus-Agent agent)
     caps: set[str]                    # tools, thinking, vision, embedding
     size: int                         # bytes on disk
     loaded: bool = False
@@ -329,7 +329,7 @@ class AutoRouter:
         elif len(chat) == 1:
             out["warnings"].append("Only one chat model is installed, so Auto always uses it. Add a second (coding or reasoning) model to get switching.")
         if c and t and c.name != t.name and gpu and (c.size + t.size) * 1.1 + 2e9 > gpu:
-            out["warnings"].append("These two models do not fit in GPU memory together, so each switch reloads weights (typically 5-60 seconds). ZEUS avoids switching when the difference is small.")
+            out["warnings"].append("These two models do not fit in GPU memory together, so each switch reloads weights (typically 5-60 seconds). Zeus-Agent avoids switching when the difference is small.")
         if t and not t.tools:
             out["warnings"].append(f"{t.name} is reasoning-only (no tool calling): in thinking turns it answers questions but cannot read or change files. Use /code to force the coding model.")
         have = {p.name for p in profiles}

@@ -1,4 +1,4 @@
-"""Terminal UI (`zeus -code`): pure helpers, selection list, event rendering, slash completion, banner, and a pty smoke test."""
+"""Terminal UI (`zeus --cli`): pure helpers, selection list, event rendering, slash completion, banner, and a pty smoke test."""
 import asyncio
 import io
 import os
@@ -123,7 +123,7 @@ def test_renderer_cards_for_answer_command_and_files():
         {"type": "tool_result", "name": "run_command", "ok": True, "output": "exit code: 0\n1 passed\nok"},
         {"type": "usage", "prompt_tokens": 10, "output_tokens": 5, "tokens_per_sec": 20.0, "context_used": 15},
         {"type": "run_end", "status": "done"}])
-    assert "⚡ ZEUS" in out and "Hello world" in out and "• one" in out and "print(1)" in out and " python " in out
+    assert "⚡ Zeus-Agent" in out and "Hello world" in out and "• one" in out and "print(1)" in out and " python " in out
     assert "**" not in out                                    # markdown was parsed, not shown raw
     assert "read" in out and "a.py" in out and "3 lines" in out
     assert "created" in out and "b.py" in out and "Created b.py" not in out      # file ops are one row, no duplicate tool result
@@ -135,7 +135,7 @@ def test_renderer_cards_for_answer_command_and_files():
 def test_renderer_drops_tool_call_json_the_model_printed_as_text():
     r, out = render_events([{"type": "token", "text": '{"name": "run_command", "arguments": {}}'},
                             {"type": "assistant_end", "text": ""}, {"type": "run_end", "status": "done"}])
-    assert "run_command" not in out and "⚡ ZEUS" not in out and r.answer == []
+    assert "run_command" not in out and "⚡ Zeus-Agent" not in out and r.answer == []
 
 
 def test_renderer_failed_command_and_mission_command_without_events():
@@ -217,14 +217,14 @@ def test_banner_wide_and_narrow():
 
 @pytest.mark.skipif(sys.platform == "win32", reason="needs a pty")
 def test_launcher_survives_project_with_its_own_app_package(tmp_path):
-    """The user's project folder is the cwd: a project containing app/ must not shadow ZEUS's own `app` package."""
+    """The user's project folder is the cwd: a project containing app/ must not shadow Zeus-Agent's own `app` package."""
     import subprocess
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     proj = tmp_path / "proj"
     (proj / "app").mkdir(parents=True)
     (proj / "app" / "__init__.py").write_text("raise RuntimeError('shadowed')")
-    r = subprocess.run([os.path.join(root, "packaging", "zeus-code"), "--version"], cwd=proj, capture_output=True, text=True, timeout=60)
-    assert r.returncode == 0 and "ZEUS" in r.stdout, r.stderr
+    r = subprocess.run([os.path.join(root, "packaging", "zeus-cli"), "--version"], cwd=proj, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0 and "Zeus-Agent" in r.stdout, r.stderr
 
 
 def test_logo_pixels_are_the_app_icon():

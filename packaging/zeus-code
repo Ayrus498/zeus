@@ -1,11 +1,3 @@
 #!/bin/sh
-# ZEUS in the terminal. Installed as /usr/bin/zeus-code by the .deb; `zeus -code` does the same thing.
-# The current directory is the project folder, so it must never be on Python's import path
-# (a project with its own `app/` folder would otherwise shadow ZEUS's code).
-HERE="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)"
-if [ -z "$ZEUS_RES_DIR" ] && [ -d "$HERE/backend/app/cli" ]; then      # running from a source checkout
-    BACKEND="$HERE/backend"; PY="$BACKEND/.venv/bin/python"; [ -x "$PY" ] || PY=python3
-else
-    RES="${ZEUS_RES_DIR:-/usr/lib/zeus}"; PY="$RES/venv/bin/python"; BACKEND="$RES/backend"
-fi
-PYTHONPATH="$BACKEND" exec "$PY" -c 'import sys; sys.path[:] = [p for p in sys.path if p not in ("", ".")]; from app.cli.app import main; raise SystemExit(main())' "$@"
+# Old name of `zeus-cli`, kept so existing scripts keep working.
+exec "$(dirname "$0")/zeus-cli" "$@"

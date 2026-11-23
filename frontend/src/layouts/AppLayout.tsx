@@ -51,7 +51,7 @@ export function AppLayout() {
         <Resizer side="left" label="Resize left pane" width={left} min={LEFT_MIN} max={leftMax} onChange={setLeftW} />
         <main className="flex min-w-0 flex-1 flex-col">
           <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2"><ModelSelector /><PermissionModeSelector /></header>
-          {!backendUp && <div className="bg-danger/15 px-4 py-2 text-xs text-danger">Cannot reach the ZEUS backend. Retrying…</div>}
+          {!backendUp && <div className="bg-danger/15 px-4 py-2 text-xs text-danger">Cannot reach the Zeus-Agent backend. Retrying…</div>}
           {backendUp && ollama && !ollama.connected && <div className="bg-warn/10 px-4 py-2 text-xs text-warn">Ollama is not reachable at {ollama.endpoint}. Start it with <span className="font-mono">ollama serve</span> or change the endpoint in Settings. <button className="cursor-pointer underline" onClick={() => setModelsOpen(true)}>Open the setup guide</button></div>}
           {backendUp && !project && <div className="px-4 py-3 text-sm text-muted">Open an existing folder or create a new project from the sidebar to get started.</div>}
           <div className="min-h-0 flex-1 overflow-auto"><Timeline items={timeline} /></div>

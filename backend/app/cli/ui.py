@@ -1,6 +1,6 @@
 """The full-screen terminal layout: a scrolling message window on top, the input box pinned to the bottom row, a status line
 under it. Dialogs (selection lists, text prompts) and the slash-command menu are drawn inside the same screen, so the box never
-moves. Everything ZEUS prints goes to the message window through `LogConsole`."""
+moves. Everything Zeus-Agent prints goes to the message window through `LogConsole`."""
 from __future__ import annotations
 
 import asyncio
@@ -38,7 +38,7 @@ MAX_LOG_LINES = 20000
 WHEEL_STEP = 3
 
 PLACEHOLDERS = [
-    "Ask ZEUS to build, fix or explain code…",
+    "Ask Zeus-Agent to build, fix or explain code…",
     "Try: fix the failing tests in this project",
     "Try: explain what this folder does",
     "Try: add input validation and tests for the signup form",

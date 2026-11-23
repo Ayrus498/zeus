@@ -1,20 +1,22 @@
-# `zeus -code`: terminal UI and command reference
+# `zeus --cli`: terminal UI and command reference
 
-`zeus -code` is ZEUS in your terminal: a chat-style coding agent that runs on your local Ollama models and
+`zeus --cli` is Zeus-Agent in your terminal: a chat-style coding agent that runs on your local Ollama models and
 works in the folder you start it from. It talks to the same backend as the desktop app, so projects,
 conversations and permissions are shared.
 
 ```bash
 cd ~/my-project
-zeus -code                       # open in the current folder (also: zeus-code)
-zeus -code ~/other-project       # or give a folder
-zeus -code -m auto --permission-mode trusted
-zeus -code -c                    # continue the latest conversation of this folder
-zeus -code -p "explain src/main.py"   # one prompt, print the answer, exit
+zeus                             # no option: opens the desktop app
+zeus --cli                       # open the terminal UI in the current folder (also: zeus-cli)
+zeus --cli ~/other-project       # or give a folder
+zeus --cli -m auto --permission-mode trusted
+zeus --cli -c                    # continue the latest conversation of this folder
+zeus --cli -p "explain src/main.py"   # one prompt, print the answer, exit
 ```
 
 | Option | Meaning |
 | --- | --- |
+| `--cli` | Start the terminal UI instead of the desktop app (`-cli` and `cli` work too; the old `-code` still works) |
 | `path` | Project folder (default: the current directory) |
 | `-m, --model` | Ollama model name, or `auto` |
 | `--ctx` | Context window, e.g. `32768` or `32k` |
@@ -25,9 +27,9 @@ zeus -code -p "explain src/main.py"   # one prompt, print the answer, exit
 
 ## The welcome screen
 
-The ZEUS thunder-bolt icon is drawn as terminal pixels (true colour). Beside it: the model, context window,
+The Zeus-Agent thunder-bolt icon is drawn as terminal pixels (true colour). Beside it: the model, context window,
 permission mode, project folder and Ollama status, then your CPU, GPU/VRAM, RAM and OS. The rounded input box
-stays pinned to the bottom row; everything ZEUS prints appears above it.
+stays pinned to the bottom row; everything Zeus-Agent prints appears above it.
 
 ![The welcome screen: icon, session and device information, command hints and the input box](screenshots/cli-01-banner.png)
 
@@ -48,7 +50,7 @@ Type `/` to open the live command menu (arrow keys and Tab).
 | `/shell <command>` (aliases `/sh`, `!command`) | Run a shell command in the project folder and print the output |
 | `/mission <file>` | Run a Markdown, Word, PDF… document as a goal-driven mission |
 | `/new`, `/resume` | New conversation, or continue an earlier one |
-| `/changes [file]` (alias `/diff`) | Files ZEUS changed, or the diff of one |
+| `/changes [file]` (alias `/diff`) | Files Zeus-Agent changed, or the diff of one |
 | `/usage`, `/status`, `/doctor`, `/about` | Usage, session state, environment check, version and machine |
 | `/copy` | Copy the last answer or command output to the clipboard |
 | `/fold` (alias `/collapse`), `/unfold` (alias `/expand`) | Fold every earlier prompt to one row, or open them all again |
@@ -77,7 +79,7 @@ not stick (use `/project`). Ctrl+C stops it; there is a 2-minute limit.
 
 ## Answers
 
-The model's reply is parsed as Markdown into a titled **ZEUS** card: headings, lists, tables, and code blocks in
+The model's reply is parsed as Markdown into a titled **Zeus-Agent** card: headings, lists, tables, and code blocks in
 their own box with the language on the edge. Tool-call JSON that a model prints as text is dropped. Reads and
 file edits are one-line rows, and your own messages are shaded bubbles.
 
@@ -120,4 +122,4 @@ arrives, and `/clear` removes them. Mouse clicks need a terminal with mouse repo
 | Click a `▾` / `▸` row | Fold or unfold that prompt and its output |
 | Shift+drag | Select text (the app captures the mouse for scrolling); or use `/copy` |
 
-You can keep typing while ZEUS works; messages are queued.
+You can keep typing while Zeus-Agent works; messages are queued.

@@ -9,7 +9,7 @@ from .chooser import Option
 GROUPS = [("qwen", "Qwen"), ("deepseek", "DeepSeek"), ("llama", "Llama"), ("gemma", "Gemma"), ("mistral", "Mistral"), ("phi", "Phi"),
           ("openai", "OpenAI"), ("granite", "IBM Granite"), ("embeddings", "Embeddings"), ("other", "Other")]
 LABEL = dict(GROUPS)
-FIT_HINT = {"best": "best for ZEUS", "good": "good", "limited": "limited", "no": "cannot chat"}
+FIT_HINT = {"best": "best for Zeus-Agent", "good": "good", "limited": "limited", "no": "cannot chat"}
 
 
 def group_of(name: str) -> str:
@@ -50,7 +50,7 @@ def installed_options(models: list[dict], loaded: list[dict] | None = None, *, w
     ld = {norm(x["name"]) for x in loaded or []}
     out: list[Option] = []
     if with_auto:
-        out.append(Option("Auto", "auto", "ZEUS picks a coding or thinking model for each prompt"))
+        out.append(Option("Auto", "auto", "Zeus-Agent picks a coding or thinking model for each prompt"))
     buckets: dict[str, list[dict]] = {}
     for m in sorted(models, key=lambda x: x["name"].lower()):
         buckets.setdefault(group_of(m["name"]), []).append(m)

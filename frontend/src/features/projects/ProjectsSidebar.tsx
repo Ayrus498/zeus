@@ -40,7 +40,7 @@ export function ProjectsSidebar() {
   return (
     <aside className="flex h-full w-full flex-col border-r border-border bg-surface">
       <div className="flex items-center gap-2 px-4 pb-2 pt-3"><Zap className="text-accent" size={20} fill="currentColor" />
-        <div><div className="text-sm font-semibold tracking-wide">ZEUS</div>
+        <div><div className="text-sm font-semibold tracking-wide">Zeus-Agent</div>
           <div className="flex items-center gap-1 text-[11px] text-muted"><span className={cn("h-1.5 w-1.5 rounded-full", ollama?.connected ? "bg-ok" : "bg-danger")} />{ollama?.connected ? "Ollama connected" : "Ollama offline"}</div></div></div>
       <div className="px-3 pb-2"><Button className="w-full" onClick={() => void newSession()} disabled={!project}><Plus size={15} /> New session</Button></div>
 
@@ -52,8 +52,8 @@ export function ProjectsSidebar() {
           <div key={p.id} className={cn("group flex items-center gap-2 rounded-md px-2 py-1.5", project?.id === p.id ? "bg-surface-2" : "hover:bg-surface-2/60", p.exists === false && "opacity-50")}>
             <button className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left" onClick={() => void selectProject(p.id)} title={p.path}>
               <span>📁</span><span className="min-w-0"><span className="block truncate text-sm">{p.name}</span>{project?.id === p.id && <span className="block truncate font-mono text-[10px] text-muted">{p.path}</span>}</span></button>
-            <button title="Remove from ZEUS (files are kept)" aria-label={`Remove ${p.name}`} className="hidden cursor-pointer rounded p-1 text-muted hover:text-danger group-hover:block"
-              onClick={() => setConfirmReq({ title: `Remove "${p.name}" from ZEUS?`, description: "Your files on disk will NOT be deleted. Its conversation history stays in the project's .zeus folder and comes back if you add the folder again.", confirmLabel: "Remove", onConfirm: () => removeProject(p.id) })}><X size={13} /></button>
+            <button title="Remove from Zeus-Agent (files are kept)" aria-label={`Remove ${p.name}`} className="hidden cursor-pointer rounded p-1 text-muted hover:text-danger group-hover:block"
+              onClick={() => setConfirmReq({ title: `Remove "${p.name}" from Zeus-Agent?`, description: "Your files on disk will NOT be deleted. Its conversation history stays in the project's .zeus folder and comes back if you add the folder again.", confirmLabel: "Remove", onConfirm: () => removeProject(p.id) })}><X size={13} /></button>
           </div>))}
         {!projects.length && <div className="px-2 py-3 text-xs text-muted">No projects yet. Open an existing folder or create a new one.</div>}
       </div>

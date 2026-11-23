@@ -1,13 +1,31 @@
-# ZEUS release notes
+# Zeus-Agent release notes
+
+## 0.2.1: Zeus-Agent name, detached launch and scrolling (2026-11-23)
+
+### Changed
+- **`zeus` frees the terminal.** Typing `zeus` opens the app in its own session and returns the prompt at once. Closing the terminal no longer closes the app, and its output goes to `~/.local/share/zeus/zeus.log`. `zeus --foreground` keeps it attached; launching from the application menu is unchanged.
+- **Scrolling while Zeus-Agent writes.** You can scroll up in the conversation, in a command's output and in a streaming code block, and the view stays where you put it. It follows the newest text again when you scroll back to the end, or press the new "Jump to latest" button.
+- **The product is named Zeus-Agent** in the app, the terminal UI and the docs, and `zeus --cli` opens the terminal UI. The command is still `zeus`; `zeus -code` keeps working.
+- Run, execute and launch now mean executing a file for the agent (it runs `./swap.out` instead of reading it).
+
+### Download and upgrade
+`zeus_0.2.1_amd64.deb` (Ubuntu/Debian amd64). SHA-256: see the checksum line added after the build below.
+```bash
+sudo apt install --reinstall ./zeus_0.2.1_amd64.deb
+```
+Your projects, conversations and settings are kept.
+
+### Docs
+- New `docs/agentic/`: requirements, design, development, testing and agent orchestration for developing Zeus-Agent with a team of specialised agents.
 
 ## 0.2.0: terminal UI, model management and settings (2026-11-18)
 
-The headline of this release is **`zeus -code`**, a full terminal version of ZEUS, plus a much better Models window
+The headline of this release is **`zeus --cli`**, a full terminal version of Zeus-Agent, plus a much better Models window
 and a new Settings menu in the desktop app.
 
-### New: `zeus -code` (terminal UI)
-- Run `zeus -code` in any folder to open ZEUS in your terminal. That folder is the project; `/project` changes it.
-- Welcome screen with the ZEUS thunder-bolt drawn as terminal pixels, with session and device information
+### New: `zeus --cli` (terminal UI)
+- Run `zeus --cli` in any folder to open Zeus-Agent in your terminal. That folder is the project; `/project` changes it.
+- Welcome screen with the Zeus-Agent thunder-bolt drawn as terminal pixels, with session and device information
   (model, context, permissions, project, Ollama, CPU, GPU/VRAM, RAM, OS) beside it.
 - Full-screen chat layout: scrolling message window on top, the input box pinned to the bottom with a placeholder.
 - Slash commands with a live menu: `/settings`, `/ollama-model`, `/ollama-ctx`, `/permissions`, `/project`,
@@ -45,7 +63,7 @@ sudo apt install --reinstall ./zeus_0.2.0_amd64.deb
 Your projects, conversations and settings are kept. Installing needs no network.
 
 ### Known limits
-- `zeus -code` mouse clicks need a terminal with mouse reporting; hold Shift to select text, or use `/copy`.
+- `zeus --cli` mouse clicks need a terminal with mouse reporting; hold Shift to select text, or use `/copy`.
 - Small models (about 7B) can still pick the wrong tool now and then; a larger tool-calling model such as `qwen3-coder` is more reliable.
 - Tested on Ubuntu 24.04 (amd64) with Ollama 0.34.
 

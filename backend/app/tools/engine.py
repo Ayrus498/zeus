@@ -93,11 +93,11 @@ class ToolContext:
 
 
 def _resolve_write(root, path):
-    """Like resolve_in_workspace, but the agent may not modify ZEUS's own data folder (.zeus/)."""
+    """Like resolve_in_workspace, but the agent may not modify Zeus-Agent's own data folder (.zeus/)."""
     p = resolve_in_workspace(root, path)
     rel = p.relative_to(Path(root).resolve())
     if rel.parts and rel.parts[0] == ".zeus":
-        raise PathViolation("the .zeus folder is ZEUS's own data (session history) and cannot be modified by the agent")
+        raise PathViolation("the .zeus folder is Zeus-Agent's own data (session history) and cannot be modified by the agent")
     return p
 
 

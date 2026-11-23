@@ -39,7 +39,7 @@ export function PromptInput() {
       return;
     }
     if (!exts.includes(ext)) {
-      toast(`"${f.name}" cannot be attached: .${ext || "?"} is not supported. ZEUS accepts ${exts.map((e) => "." + e).join(", ")}. Images and audio are not supported.`, "error");
+      toast(`"${f.name}" cannot be attached: .${ext || "?"} is not supported. Zeus-Agent accepts ${exts.map((e) => "." + e).join(", ")}. Images and audio are not supported.`, "error");
       return;
     }
     if (f.size > MAX_UPLOAD) { toast(`"${f.name}" is ${(f.size / 2 ** 20).toFixed(1)} MB; the limit is ${MAX_UPLOAD / 2 ** 20} MB.`, "error"); return; }
@@ -87,7 +87,7 @@ export function PromptInput() {
                   {["2", "3", "5", "8", "10"].map((n) => <option key={n} value={n}>{n}</option>)}</Select></label>
               {isAuto && <label className="flex cursor-pointer items-center gap-1.5" title="Use the reasoning model (when one is installed) to review the work. Slower if it has to be loaded.">
                 <input type="checkbox" checked={verifier === "think"} onChange={(e) => setVerifier(e.target.checked ? "think" : "same")} />Reasoning model reviews</label>}
-              <span className="ml-auto">ZEUS works in rounds and reviews against the criteria until they are all met.</span>
+              <span className="ml-auto">Zeus-Agent works in rounds and reviews against the criteria until they are all met.</span>
             </div>
           </div>)}
         <textarea
@@ -95,14 +95,14 @@ export function PromptInput() {
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
           placeholder={!project ? "Open a project to begin" : noModel ? "Select a model to begin" : !ollama?.connected ? "Ollama is not connected"
             : attachment ? "Optional: add instructions for this document…  (Enter to start the mission)"
-            : `Ask ZEUS to build, modify or explain code…  (Enter to send, Shift+Enter for newline${isAuto ? "; /think or /code forces a model" : ""}; attach a .md, PDF, Word… file to run it as a mission)`}
+            : `Ask Zeus-Agent to build, modify or explain code…  (Enter to send, Shift+Enter for newline${isAuto ? "; /think or /code forces a model" : ""}; attach a .md, PDF, Word… file to run it as a mission)`}
           disabled={disabled && !running}
           className="w-full resize-none bg-transparent px-2 py-1 outline-none placeholder:text-muted" />
         <div className="flex items-center justify-between">
           <div>
             <input ref={file} type="file" accept={exts.map((e) => "." + e).join(",")} className="hidden" aria-label="Attach Markdown file" data-testid="attach-input"
               onChange={async (e) => { const input = e.target; await attach(input.files?.[0]); input.value = ""; }} />
-            <button type="button" aria-label="Attach a Markdown file" title={`Attach a document (.md, PDF, Word, PowerPoint, Excel, HTML, CSV…): ZEUS converts it to Markdown, reads it as the task and works on it until it is verified`} disabled={disabled || running || !!converting}
+            <button type="button" aria-label="Attach a Markdown file" title={`Attach a document (.md, PDF, Word, PowerPoint, Excel, HTML, CSV…): Zeus-Agent converts it to Markdown, reads it as the task and works on it until it is verified`} disabled={disabled || running || !!converting}
               onClick={() => file.current?.click()} className="grid h-8 w-8 cursor-pointer place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"><Paperclip size={16} /></button>
           </div>
           {running

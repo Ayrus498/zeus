@@ -89,7 +89,7 @@ async def test_engine_sends_model_specific_request(harness, db):
     prov = Capture(R1)
     await AgentEngine(db, prov, ToolEngine()).run(h.ctx, s, "hello")
     c = prov.calls[0]
-    assert c["messages"][0]["role"] == "user" and "You are ZEUS" in c["messages"][0]["content"]       # system folded for R1
+    assert c["messages"][0]["role"] == "user" and "You are Zeus-Agent" in c["messages"][0]["content"]       # system folded for R1
     assert c["options"]["temperature"] >= 0.5 and c["think"] is None and c["tools"]                     # tools still native (reported by Ollama)
 
 

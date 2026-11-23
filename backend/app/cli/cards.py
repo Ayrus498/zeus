@@ -67,7 +67,7 @@ class ZMarkdown(Markdown):
         super().__init__(text, code_theme=CODE_THEME, hyperlinks=False, inline_code_theme=CODE_THEME)
 
 
-def answer_card(text: str, title: str = "ZEUS") -> Panel:
+def answer_card(text: str, title: str = "Zeus-Agent") -> Panel:
     return Panel(ZMarkdown(text.strip()), title=Text.assemble(("⚡ ", f"bold {PURPLE}"), (title, f"bold {PURPLE}")), title_align="left",
                  border_style=PURPLE_DEEP, box=box.ROUNDED, padding=(0, 1))
 

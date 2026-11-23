@@ -1,4 +1,4 @@
-"""HTTP/WebSocket client for the ZEUS backend, plus starting the backend when nothing is listening."""
+"""HTTP/WebSocket client for the Zeus-Agent backend, plus starting the backend when nothing is listening."""
 from __future__ import annotations
 
 import asyncio
@@ -44,10 +44,10 @@ def start_backend(port: int = DEFAULT_PORT, log: Path | None = None) -> subproce
         if listening(port):
             return proc
         if proc.poll() is not None:
-            raise ApiError(f"The ZEUS backend exited immediately (see {log}).")
+            raise ApiError(f"The Zeus-Agent backend exited immediately (see {log}).")
         time.sleep(0.1)
     proc.terminate()
-    raise ApiError(f"The ZEUS backend did not start within 15 s (see {log}).")
+    raise ApiError(f"The Zeus-Agent backend did not start within 15 s (see {log}).")
 
 
 def stop_backend(proc: subprocess.Popen | None) -> None:
@@ -71,7 +71,7 @@ class Api:
         try:
             r = await self.http.request(method, path, json=json_body, params=params, content=content)
         except httpx.HTTPError as e:
-            raise ApiError(f"cannot reach the ZEUS backend: {type(e).__name__}") from e
+            raise ApiError(f"cannot reach the Zeus-Agent backend: {type(e).__name__}") from e
         if r.status_code >= 400:
             try:
                 msg = r.json().get("detail", r.text)

@@ -1,4 +1,4 @@
-"""The interactive `zeus -code` application: prompt loop, slash commands, approvals."""
+"""The interactive `zeus --cli` application: prompt loop, slash commands, approvals."""
 from __future__ import annotations
 
 import argparse
@@ -32,7 +32,7 @@ from .ui import FullUI
 from .theme import DIM, ERR, OK, PURPLE, WARN
 
 PERM_OPTIONS = [
-    ("read_only", "Read only", "ZEUS can read files but cannot change anything or run commands"),
+    ("read_only", "Read only", "Zeus-Agent can read files but cannot change anything or run commands"),
     ("approval", "Approval mode", "ask before every file change or command (recommended)"),
     ("trusted", "Trusted workspace", "allow edits and commands in this folder; still asks to delete, install or git push"),
 ]
@@ -44,13 +44,13 @@ COMMANDS: dict[str, tuple[tuple[str, ...], str]] = {
     "settings": ((), "Models, Ollama endpoint, current model, installed models, About"),
     "ollama-model": (("model",), "Choose the model from your installed Ollama models"),
     "ollama-ctx": (("ollama-ctxt", "ctx"), "Set the context window size"),
-    "permissions": (("perm",), "Choose what ZEUS is allowed to do"),
+    "permissions": (("perm",), "Choose what Zeus-Agent is allowed to do"),
     "project": (("cd",), "Change the project folder (default: where you started zeus)"),
     "shell": (("sh",), "Run a shell command in the project folder and show its output  (e.g. /shell ls -la)"),
     "mission": ((), "Run a Markdown/Word/PDF document as a goal-driven mission"),
     "new": ((), "Start a new conversation"),
     "resume": (("sessions",), "Continue an earlier conversation in this project"),
-    "changes": (("diff",), "List files ZEUS changed (use /changes <file> for the diff)"),
+    "changes": (("diff",), "List files Zeus-Agent changed (use /changes <file> for the diff)"),
     "usage": ((), "Token usage for this conversation"),
     "status": ((), "Show the welcome screen with current settings"),
     "doctor": ((), "Check Ollama, the backend and the selected model"),
@@ -59,7 +59,7 @@ COMMANDS: dict[str, tuple[tuple[str, ...], str]] = {
     "fold": (("collapse",), "Fold all earlier prompts to one line each (click a ▾ row to fold or unfold one)"),
     "unfold": (("expand",), "Unfold every prompt and its output"),
     "clear": ((), "Clear the screen"),
-    "exit": (("quit", "q"), "Leave ZEUS"),
+    "exit": (("quit", "q"), "Leave Zeus-Agent"),
 }
 ALIAS = {a: n for n, (al, _) in COMMANDS.items() for a in (n, *al)}
 
@@ -309,7 +309,7 @@ class Cli:
         t = Table.grid(padding=(0, 3))
         t.add_column(style=DIM)
         t.add_column()
-        for k, v in [("ZEUS", f"v{about['version']} · {about['tagline']}"), ("Founder", about["founder"]), ("GitHub", about["github"]),
+        for k, v in [("Zeus-Agent", f"v{about['version']} · {about['tagline']}"), ("Founder", about["founder"]), ("GitHub", about["github"]),
                      ("Website", about["website"]), ("License", about["license"]), ("", ""), *bn.device_rows(about),
                      ("Kernel", f"{about['platform']['kernel']}"), ("Ollama", about["platform"].get("ollama") or "not connected"),
                      ("Swap", f"{fmt_bytes(about['memory'].get('swap_total'))}")]:
@@ -387,7 +387,7 @@ class Cli:
                 return
             await self.set_perm(hit)
             return
-        v = await self._choose("Permissions  (what ZEUS may do in this project)", [Option(l, m, h) for m, l, h in PERM_OPTIONS], current=self.perm)
+        v = await self._choose("Permissions  (what Zeus-Agent may do in this project)", [Option(l, m, h) for m, l, h in PERM_OPTIONS], current=self.perm)
         if v:
             await self.set_perm(v)
 
@@ -490,7 +490,7 @@ class Cli:
                 Option("Installed models", "installed", f"{len(self.installed)} models"),
                 Option("Context window", "ctx", f"{self.ctx:,} tokens"),
                 Option("Permissions", "perm", next((l for k, l, _ in PERM_OPTIONS if k == self.perm), self.perm)),
-                Option("About ZEUS", "about", f"v{config.VERSION} · device & memory"),
+                Option("About Zeus-Agent", "about", f"v{config.VERSION} · device & memory"),
             ]
             v = await self._choose("Settings", opts)
             if not v:
@@ -540,7 +540,7 @@ class Cli:
 
     async def set_models(self):
         while True:
-            v = await self._choose("Models", [Option("Use an installed model", "use", "same as /ollama-model"), Option("Download a model", "dl", "browse the ZEUS guide by family"),
+            v = await self._choose("Models", [Option("Use an installed model", "use", "same as /ollama-model"), Option("Download a model", "dl", "browse the Zeus-Agent guide by family"),
                                          Option("Manage installed models", "manage", "use · unload · uninstall"), Option("Auto mode", "auto", "what Auto would pick right now")])
             if not v:
                 return
@@ -712,7 +712,7 @@ class Cli:
     async def approve(self, ev: dict):
         self.c.print(permission_panel(ev))
         v = await self._choose("Allow this?", [Option("Yes", "once", "just this once"), Option("Yes, for this session", "session", "don't ask again for this kind of action"),
-                                          Option("No", "reject", "tell ZEUS it was denied")], current="once", hint="↑/↓ · Enter · Esc = No")
+                                          Option("No", "reject", "tell Zeus-Agent it was denied")], current="once", hint="↑/↓ · Enter · Esc = No")
         await self.api.respond(ev["id"], v or "reject")
         self.c.print(Text("  ✓ allowed" if v in ("once", "session") else "  ✗ denied", style=OK if v in ("once", "session") else ERR))
 
@@ -784,7 +784,7 @@ class Cli:
     # ------------------------------------------------------------------ input handling (pinned box)
     def submit(self, text: str):
         if self.working and self.queue is not None:
-            self.c.print(Text(f"  ⏳ queued until ZEUS is done: {clip(text, 70)}", style=DIM))
+            self.c.print(Text(f"  ⏳ queued until Zeus-Agent is done: {clip(text, 70)}", style=DIM))
         self.queue.put_nowait(text)
 
     def interrupt(self):
@@ -839,7 +839,7 @@ class Cli:
         hist.mkdir(parents=True, exist_ok=True)
         self.queue = asyncio.Queue()
         self.ui = FullUI(hist / "cli_history", SlashCompleter(), self.toolbar, on_submit=self.submit, on_ctrl_c=self.on_ctrl_c, on_eof=self.on_eof,
-                         placeholder="Ask ZEUS to build, fix or explain code…  (type / for commands)")
+                         placeholder="Ask Zeus-Agent to build, fix or explain code…  (type / for commands)")
         real_console, self.c = self.c, self.ui.make_console()      # from here on everything is printed into the message window
         self.show_banner()
         if not self.ollama.get("connected"):
@@ -867,15 +867,15 @@ class Cli:
 
 # ---------------------------------------------------------------------- entry point
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="zeus -code", description="ZEUS in the terminal: a local coding agent powered by Ollama.")
+    p = argparse.ArgumentParser(prog="zeus --cli", description="Zeus-Agent in the terminal: a local coding agent powered by Ollama.")
     p.add_argument("path", nargs="?", help="project folder (default: the current directory)")
     p.add_argument("-m", "--model", help="Ollama model name, or 'auto'")
     p.add_argument("--ctx", type=parse_ctx_arg, help="context window, e.g. 32768 or 32k")
-    p.add_argument("--permission-mode", choices=["read_only", "approval", "trusted"], help="what ZEUS may do")
+    p.add_argument("--permission-mode", choices=["read_only", "approval", "trusted"], help="what Zeus-Agent may do")
     p.add_argument("-c", "--continue", dest="resume", action="store_true", help="continue the latest conversation in this project")
     p.add_argument("-p", "--print", dest="print_prompt", metavar="PROMPT", help="run one prompt non-interactively, print the answer and exit")
     p.add_argument("--port", type=int, default=DEFAULT_PORT, help=argparse.SUPPRESS)
-    p.add_argument("-V", "--version", action="version", version=f"ZEUS {config.VERSION}")
+    p.add_argument("-V", "--version", action="version", version=f"Zeus-Agent {config.VERSION}")
     return p
 
 

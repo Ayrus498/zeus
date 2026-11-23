@@ -9,7 +9,7 @@ import { catalogFamily } from "../../lib/modelGroups";
 import type { Catalog, CatalogModel, DownloadRow, Fit, Overview } from "../../services/types";
 
 export const FIT: Record<Fit, { text: string; cls: string; hint: string }> = {
-  best: { text: "Best for ZEUS", cls: "bg-accent text-accent-foreground", hint: "Strong coding / agent model with native tool calling." },
+  best: { text: "Best for Zeus-Agent", cls: "bg-accent text-accent-foreground", hint: "Strong coding / agent model with native tool calling." },
   good: { text: "Good", cls: "bg-ok/20 text-ok", hint: "Works well for chat or reasoning; tool use is fair." },
   limited: { text: "Limited", cls: "bg-warn/15 text-warn", hint: "Usable, but weak at multi-step tool use (tiny, older or vision-only models)." },
   no: { text: "Not a chat model", cls: "bg-surface-2 text-muted", hint: "Embedding model: cannot drive the agent." },

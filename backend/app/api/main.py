@@ -92,7 +92,7 @@ class SettingsUpdate(BaseModel):
 
 
 def create_app(db_path=None) -> FastAPI:
-    app = FastAPI(title="ZEUS backend", version=config.VERSION)
+    app = FastAPI(title="Zeus-Agent backend", version=config.VERSION)
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
     db = Database(db_path or config.DB_PATH)
     projects, sessions = ProjectManager(db), SessionManager(db)
@@ -594,7 +594,7 @@ def create_app(db_path=None) -> FastAPI:
 
     @app.get("/api/convert/formats")
     async def convert_formats():
-        """Which attachment types ZEUS can turn into Markdown, and whether MarkItDown is installed."""
+        """Which attachment types Zeus-Agent can turn into Markdown, and whether MarkItDown is installed."""
         return convert_service.info()
 
     @app.post("/api/convert")

@@ -1,6 +1,6 @@
 """Runs MarkItDown on one file inside a throw-away subprocess: `python -m app.convert.worker <file> <ext>`.
 
-Why a subprocess: converting untrusted PDFs/Office files/ZIPs is the riskiest thing ZEUS does with attachments. Here it gets a hard
+Why a subprocess: converting untrusted PDFs/Office files/ZIPs is the riskiest thing Zeus-Agent does with attachments. Here it gets a hard
 timeout (killed by the parent), CPU and memory limits, and NO network (MarkItDown has converters for audio transcription, YouTube,
 Bing and URL fetching that must never run). Writes one JSON object to stdout.
 """
@@ -22,7 +22,7 @@ def _limits() -> None:
 def _block_network() -> None:
     """Called AFTER imports (replacing socket.socket itself would break ssl's subclasses). Any connect/lookup fails loudly."""
     def deny(*a, **k):
-        raise OSError("network access is disabled inside the ZEUS document converter")
+        raise OSError("network access is disabled inside the Zeus-Agent document converter")
     socket.socket.connect = deny           # type: ignore[assignment]
     socket.socket.connect_ex = deny        # type: ignore[assignment]
     socket.getaddrinfo = deny              # type: ignore[assignment]
@@ -34,7 +34,7 @@ TEXTLIKE = {"txt", "json", "xml", "md", "markdown", "zip"}      # only these may
 
 
 def build_converter(ext: str):
-    """A MarkItDown instance with ONLY the converters ZEUS allows. No audio/image/YouTube/Bing/Wikipedia/RSS/Outlook/Azure
+    """A MarkItDown instance with ONLY the converters Zeus-Agent allows. No audio/image/YouTube/Bing/Wikipedia/RSS/Outlook/Azure
     converters are even loaded, and binary formats get no plain-text catch-all (so a corrupt PDF fails instead of being read as bytes)."""
     from markitdown import PRIORITY_GENERIC_FILE_FORMAT, MarkItDown
     from markitdown.converters import (CsvConverter, DocxConverter, EpubConverter, HtmlConverter, IpynbConverter, PdfConverter,

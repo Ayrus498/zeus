@@ -128,7 +128,7 @@ export function ModelsWindow() {
                       {(!ov.connected || ov.installed.length === 0) && <SetupGuide connected={ov.connected} error={ov.error} endpoint={ov.endpoint} hasModels={ov.installed.length > 0} />}
                       <AutoModeCard />
                       <Installed ov={ov} catalog={catalog} />
-                      {catalog && <p className="text-xs text-muted">Pick a family on the left to see what each model is good for and download it. <Chip cls="bg-accent text-accent-foreground">best</Chip> marks models that suit the ZEUS agent best.</p>}
+                      {catalog && <p className="text-xs text-muted">Pick a family on the left to see what each model is good for and download it. <Chip cls="bg-accent text-accent-foreground">best</Chip> marks models that suit the Zeus-Agent agent best.</p>}
                     </>
                   ) : <ModelDetail item={selected} ov={ov} catalog={catalog} />}
                 </div>)}

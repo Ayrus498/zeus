@@ -61,8 +61,8 @@ export function AutoModeCard() {
     <section className="rounded-lg border border-accent/40 bg-accent/5 p-3" data-testid="auto-card">
       <div className="flex items-center gap-2"><Sparkles size={14} className="text-accent" /><span className="text-sm font-medium">Auto mode</span>
         {isAuto ? <span className="rounded bg-ok/15 px-1.5 py-0.5 text-[10px] text-ok">on for this session</span>
-          : <Button size="sm" className="ml-auto" disabled={!project} title={project ? "Let ZEUS choose the model for each prompt" : "Open a project first"} onClick={() => void setModel("auto")}>Use Auto</Button>}</div>
-      <p className="mt-1 text-[11px] text-muted">ZEUS picks a coding or a reasoning model for each prompt from what is installed, using what it knows about each model, what fits your GPU/RAM and what is already loaded.
+          : <Button size="sm" className="ml-auto" disabled={!project} title={project ? "Let Zeus-Agent choose the model for each prompt" : "Open a project first"} onClick={() => void setModel("auto")}>Use Auto</Button>}</div>
+      <p className="mt-1 text-[11px] text-muted">Zeus-Agent picks a coding or a reasoning model for each prompt from what is installed, using what it knows about each model, what fits your GPU/RAM and what is already loaded.
         The choice is made once per prompt and shown in the chat. Start a prompt with <span className="font-mono">/think</span> or <span className="font-mono">/code</span> to force one.</p>
       {err && <div className="mt-2 text-xs text-danger">Could not build the plan: {err}</div>}
       {plan && (

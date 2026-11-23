@@ -1,5 +1,5 @@
 #!/bin/sh
-# Creates the Python virtualenv for the ZEUS backend next to the installed resources.
+# Creates the Python virtualenv for the Zeus-Agent backend next to the installed resources.
 # Dependencies are installed OFFLINE from the wheelhouse bundled in the package (no network needed).
 set -e
 RES="${ZEUS_RES_DIR:-/usr/lib/zeus}"

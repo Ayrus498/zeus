@@ -37,6 +37,6 @@ def test_lspci_gpus():
 
 def test_about_endpoint_shape(client):
     j = client.get("/api/about").json()
-    assert j["name"] == "ZEUS" and j["version"] == config.VERSION and j["founder"] and j["github"].startswith("https://github.com/")
+    assert j["name"] == "Zeus-Agent" and j["version"] == config.VERSION and j["founder"] and j["github"].startswith("https://github.com/")
     assert set(j) >= {"platform", "cpu", "gpus", "memory"} and isinstance(j["gpus"], list)
     assert j["memory"]["total"] is None or j["memory"]["total"] > 0

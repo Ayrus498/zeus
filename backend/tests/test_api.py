@@ -102,7 +102,7 @@ def test_database_recreated_if_data_dir_deleted(tmp_path):
     d = tmp_path / "data"
     c = TestClient(create_app(str(d / "zeus.db")))
     assert c.get("/api/projects").status_code == 200
-    shutil.rmtree(d)                       # e.g. user wipes ~/.local/share/zeus while ZEUS is running
+    shutil.rmtree(d)                       # e.g. user wipes ~/.local/share/zeus while Zeus-Agent is running
     assert c.get("/api/projects").json() == []
     parent = tmp_path / "ws"; parent.mkdir()
     r = c.post("/api/projects/create", json={"parent": str(parent), "name": "demo"})

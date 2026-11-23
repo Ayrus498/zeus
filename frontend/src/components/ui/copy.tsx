@@ -1,7 +1,8 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Check, Copy } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { useStickScroll } from "../../hooks/useStickScroll";
 
 async function copyText(text: string): Promise<boolean> {
   try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
@@ -31,15 +32,10 @@ export function CopyButton({ getText, className }: { getText: () => string; clas
 /** Wraps a code block and shows a copy button on hover. Pass `text`, or omit to copy the rendered text content. */
 export function CodeBox({ text, children, className, follow = false }: { text?: string; children: ReactNode; className?: string; follow?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
-  const pinned = useRef(true);
   // While streaming, keep the block scrolled to the newest line - unless the reader scrolled up to look at earlier code.
-  useLayoutEffect(() => {
-    const pre = ref.current?.querySelector("pre");
-    if (follow && pre && pinned.current) pre.scrollTop = pre.scrollHeight;
-  });
+  useStickScroll(() => ref.current?.querySelector("pre"), children, follow);
   return (
-    <div ref={ref} data-codebox className={cn("group/code relative", className)}
-      onScrollCapture={(e) => { const el = e.target as HTMLElement; if (el.tagName === "PRE") pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
+    <div ref={ref} data-codebox className={cn("group/code relative", className)}>
       {children}
       <CopyButton className="absolute right-2 top-2 opacity-0 transition-opacity focus:opacity-100 group-hover/code:opacity-100"
         getText={() => text ?? ref.current?.querySelector("pre")?.textContent ?? ""} />

@@ -1,7 +1,7 @@
 """Rescue: the user asked for a file, the model printed the whole file in chat instead of calling create_file.
 
 Small local models often do this (especially when the prompt says "output only the code"). Instead of ending the run with
-nothing saved, ZEUS turns the printed file into a normal create_file call, which still goes through the permission engine
+nothing saved, Zeus-Agent turns the printed file into a normal create_file call, which still goes through the permission engine
 (approval card with the diff, never overwrites). Deliberately conservative: it only fires when the intent is unambiguous.
 """
 from __future__ import annotations

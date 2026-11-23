@@ -24,7 +24,7 @@ function Plan({ plan }: { plan: Record<string, unknown> }) {
   if (plan.system) chips.push(String(plan.system));
   if (!chips.length) return null;
   return (
-    <div className="flex flex-wrap gap-1" title="How ZEUS prepared its requests for this model, from Ollama's metadata and the model family's recommendations" data-testid="mission-plan">
+    <div className="flex flex-wrap gap-1" title="How Zeus-Agent prepared its requests for this model, from Ollama's metadata and the model family's recommendations" data-testid="mission-plan">
       {chips.map((c) => <span key={c} className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-muted">{c}</span>)}
     </div>
   );

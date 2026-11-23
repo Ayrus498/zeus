@@ -192,7 +192,7 @@ async def fetch(family: str, db=None, force: bool = False) -> dict:
                     except Exception:
                         pass
                 return {**data, "source": "live"}
-            err = "ollama.com returned a page ZEUS could not read."
+            err = "ollama.com returned a page Zeus-Agent could not read."
     except (httpx.HTTPError, OSError) as e:
         err = f"Could not reach ollama.com ({type(e).__name__})."
     if db is not None:

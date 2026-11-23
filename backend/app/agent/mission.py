@@ -1,4 +1,4 @@
-"""Missions: an attached Markdown document becomes the objective; ZEUS works on it in rounds until it is *verified*.
+"""Missions: an attached Markdown document becomes the objective; Zeus-Agent works on it in rounds until it is *verified*.
 
 Flow per mission
   1. parse the document (title, objective, acceptance criteria from checkboxes / "Acceptance criteria"-style sections);
@@ -107,10 +107,10 @@ def build_task(mission_id: int, name: str, md: str, criteria: list[str], note: s
     parts = [f"<!--zeus:mission id={mission_id} name={name}-->",
              f"# MISSION from the attached document `{name}`",
              "Complete this mission autonomously with your tools (create/edit files, run commands and tests). Keep going until EVERY acceptance "
-             "criterion below is satisfied. ZEUS will review your work against the criteria and send you back if anything is missing, so do the "
+             "criterion below is satisfied. Zeus-Agent will review your work against the criteria and send you back if anything is missing, so do the "
              "whole job and check it yourself first (run the tests/commands that prove it). When you believe it is complete, reply with a short "
              "summary and no tool call.",
-             "", "## Acceptance criteria (checked by ZEUS)", crit]
+             "", "## Acceptance criteria (checked by Zeus-Agent)", crit]
     if note.strip():
         parts += ["", "## Extra instructions from the user", note.strip()]
     parts += ["", "## Mission document", f"{f}markdown", md.strip(), f]
@@ -200,7 +200,7 @@ def verifier_messages(objective: str, criteria: list[str], evidence: str) -> lis
 
 
 def read_verdict(reply: str, criteria: list[str]) -> dict | None:
-    """-> {"results":[{"id","text","met","evidence"}], "accepted": bool, "feedback": str}. ZEUS computes `accepted` itself."""
+    """-> {"results":[{"id","text","met","evidence"}], "accepted": bool, "feedback": str}. Zeus-Agent computes `accepted` itself."""
     j = extract_json(reply)
     if not j or not isinstance(j.get("criteria"), list):
         return None
@@ -265,7 +265,7 @@ class MissionRunner:
 
     async def _confirm_tests(self, ctx, criteria: list[str], since: float) -> None:
         """If a criterion says tests must pass and the agent's own test run succeeded, run that command once more.
-        Catches flaky or state-dependent suites (tests that only pass on a clean slate) before ZEUS accepts anything.
+        Catches flaky or state-dependent suites (tests that only pass on a clean slate) before Zeus-Agent accepts anything.
         Goes through the normal run_command path, so the permission mode applies (Approval mode asks again)."""
         if not any(_TEST_CRIT.search(c) for c in criteria):
             return
@@ -275,7 +275,7 @@ class MissionRunner:
             return                                                    # nothing passed yet (or never ran): hard_checks reports that
         cmd = tests[0]["command"]
         await ctx.emit({"type": "notice", "level": "info", "text": f"Confirming the tests pass by running `{cmd[:80]}` again."})
-        args = {"command": cmd, "reason": "ZEUS re-runs the tests to confirm they pass (catches flaky or state-dependent tests)"}
+        args = {"command": cmd, "reason": "Zeus-Agent re-runs the tests to confirm they pass (catches flaky or state-dependent tests)"}
         await ctx.emit({"type": "tool_call", "name": "run_command", "args": args})
         res = await self.engine.tools.execute(ctx, "run_command", args)
         await ctx.emit({"type": "tool_result", "name": "run_command", "ok": res["ok"], "output": res["output"][:4000]})
@@ -383,7 +383,7 @@ class MissionRunner:
                 failing = last_failure(self.db.q("SELECT command,exit_code,output FROM executions WHERE session_id=? AND started>=? ORDER BY id DESC", (sid, since)))
                 fail_txt = (f"\n\nThe most recent failing command was `{failing['command'][:100]}` (exit {failing['exit_code']}). Its output:\n"
                             f"{(failing['output'] or '').strip()[-900:]}") if failing else ""
-                fb = (f"<!--zeus:feedback round={rnd}-->\n[ZEUS review, round {rnd}/{max_rounds}] The mission is NOT accepted yet.\n"
+                fb = (f"<!--zeus:feedback round={rnd}-->\n[Zeus-Agent review, round {rnd}/{max_rounds}] The mission is NOT accepted yet.\n"
                       f"Unmet criteria:\n" + "\n".join(f"- ({r['id']}) {r['text']} - {r['evidence']}" for r in verdict["results"] if not r["met"]) +
                       f"\n\nWhat to do:\n{verdict['feedback']}{fail_txt}\n\nFix this with your tools, verify it yourself, then reply with a short summary.")
                 self.engine._save(sid, "user", "user", fb)

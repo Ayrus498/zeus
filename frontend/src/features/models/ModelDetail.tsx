@@ -104,7 +104,7 @@ const libraryFamily = (name: string) => { const b = name.split(":")[0]; return /
 function Examples({ items }: { items: { prompt: string; shows: string }[] }) {
   return (
     <section data-testid="model-examples">
-      <div className="mb-1 text-xs font-medium text-muted">Examples <span className="font-normal">(paste into the ZEUS prompt)</span></div>
+      <div className="mb-1 text-xs font-medium text-muted">Examples <span className="font-normal">(paste into the Zeus-Agent prompt)</span></div>
       <div className="space-y-1.5">
         {items.map((e) => (
           <div key={e.prompt} className="rounded-md border border-border bg-surface px-3 py-2 text-xs">
@@ -122,7 +122,7 @@ export function ModelDetail({ item, ov, catalog }: { item: Item; ov: Overview; c
     return (
       <div className="space-y-3" data-testid="model-detail">
         <div><div className="flex flex-wrap items-center gap-2"><h3 className="font-mono text-base">{m.name}</h3><Chip cls="bg-ok/15 text-ok"><Check size={10} className="mr-0.5 inline" />installed</Chip></div>
-          <p className="mt-1 text-xs text-muted">This model is installed on your machine but is not part of ZEUS's model guide, so there is no curated description. ZEUS still reads its capabilities from Ollama when you use it.</p></div>
+          <p className="mt-1 text-xs text-muted">This model is installed on your machine but is not part of Zeus-Agent's model guide, so there is no curated description. Zeus-Agent still reads its capabilities from Ollama when you use it.</p></div>
         <InstalledRow m={m} ov={ov} notChat={false} />
         {libraryFamily(m.name) && <LiveDetails family={libraryFamily(m.name)!} />}
       </div>

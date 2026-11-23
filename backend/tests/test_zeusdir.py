@@ -183,7 +183,7 @@ def test_writes_are_debounced_and_flushed(tmp_path, proj):
 def test_database_deleted_while_running_is_repopulated_from_zeus_files(tmp_path, proj):
     client, app = make_client(tmp_path, "live.db")
     p, sid = seed(app, client, proj)
-    (tmp_path / "live.db").unlink()                       # data folder wiped while ZEUS is open
+    (tmp_path / "live.db").unlink()                       # data folder wiped while Zeus-Agent is open
     projects = client.get("/api/projects").json()
     assert [x["path"] for x in projects] == [str(proj)]
     sessions = client.get(f"/api/sessions?project_id={projects[0]['id']}").json()

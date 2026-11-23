@@ -1,4 +1,4 @@
-"""Durable, human-readable copy of ZEUS state in `.zeus/` folders.
+"""Durable, human-readable copy of Zeus-Agent state in `.zeus/` folders.
 
   <project>/.zeus/            per-project: conversation sessions (the context sent to Ollama), project.json
   ~/.zeus/settings.json       per-user: Ollama endpoint, default model/context, the list of known projects
@@ -31,14 +31,14 @@ DEBOUNCE_S = 1.0
 
 PROJECT_README = """# .zeus
 
-This folder is written by the ZEUS desktop app. It keeps this project's conversation history (the context ZEUS
+This folder is written by the Zeus-Agent desktop app. It keeps this project's conversation history (the context Zeus-Agent
 sends to Ollama) so it can be reloaded the next time you open the project.
 
 - `sessions/<id>.json` - one file per conversation (messages, tool calls, model, context size, token counts)
 - `project.json` - project preferences (never permissions)
 
 It is git-ignored by default (`.gitignore` inside contains `*`) because sessions may contain code or secrets you pasted.
-Delete this folder to forget the history for this project. Do not edit session files while ZEUS is running.
+Delete this folder to forget the history for this project. Do not edit session files while Zeus-Agent is running.
 """
 
 

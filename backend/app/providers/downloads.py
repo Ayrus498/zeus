@@ -16,7 +16,7 @@ class DownloadManager:
         self.db = db
         self.tasks: dict[int, asyncio.Task] = {}
         # A download cannot outlive the process: mark leftovers so the UI tells the truth. Ollama resumes partial pulls.
-        self.db.x("UPDATE downloads SET status='interrupted', error='ZEUS was closed during this download. '"
+        self.db.x("UPDATE downloads SET status='interrupted', error='Zeus-Agent was closed during this download. '"
                   " || 'Press Retry to resume - Ollama keeps the layers already downloaded.', updated=? "
                   "WHERE status IN ('queued','running')", (time.time(),))
 

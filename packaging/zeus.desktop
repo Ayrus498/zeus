@@ -1,0 +1,10 @@
+[Desktop Entry]
+Categories=Development;
+Comment=Local AI coding agent powered by Ollama
+Exec={{exec}}
+StartupWMClass={{exec}}
+Icon={{icon}}
+Name=Zeus-Agent
+GenericName=Local AI coding agent
+Terminal=false
+Type=Application

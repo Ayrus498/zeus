@@ -12,7 +12,7 @@ COMMAND_TIMEOUT = int(os.environ.get("ZEUS_CMD_TIMEOUT", "120"))
 MAX_FILE_BYTES = 1_000_000
 MAX_OUTPUT_CHARS = 20_000
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 FOUNDER = "Ayrus498"
 GITHUB_URL = "https://github.com/Ayrus498/zeus"
 WEBSITE_URL = "https://zeus-agent.web.app/"

@@ -87,7 +87,7 @@ def memory_info() -> dict:
 
 def about(ollama_version: str | None = None) -> dict:
     return {
-        "name": "ZEUS", "tagline": "Local AI coding agent powered by Ollama", "version": config.VERSION, "founder": config.FOUNDER,
+        "name": "Zeus-Agent", "tagline": "Local AI coding agent powered by Ollama", "version": config.VERSION, "founder": config.FOUNDER,
         "github": config.GITHUB_URL, "website": config.WEBSITE_URL, "license": config.LICENSE_NAME,
         "platform": {"os": os_name(), "kernel": platform.release(), "arch": platform.machine(), "python": sys.version.split()[0],
                      "ollama": ollama_version},

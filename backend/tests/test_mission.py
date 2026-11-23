@@ -119,7 +119,7 @@ async def test_rejected_then_accepted_after_feedback(harness, ws_dir, db):
     assert res["status"] == "accepted" and t_count(h, "mission_round") == 2
     checks = [e for e in h.events if e["type"] == "mission_check"]
     assert [c["accepted"] for c in checks] == [False, True] and "Add test_todo.py" in checks[0]["feedback"]
-    fb = [m for m in sm.messages(s["id"]) if m["role"] == "user" and "[ZEUS review" in m["content"]]
+    fb = [m for m in sm.messages(s["id"]) if m["role"] == "user" and "[Zeus-Agent review" in m["content"]]
     assert len(fb) == 1 and "(2)" in fb[0]["content"] and "Add test_todo.py" in fb[0]["content"]
     # round 2 actually sent the feedback to the model (marker stripped)
     round2 = json.dumps(prov.seen[2])
@@ -257,7 +257,7 @@ async def test_failed_tests_block_acceptance_and_their_output_goes_back_to_the_a
     res = await runner.run(h.ctx, s, "t.md", crit_doc, "", 3)
     checks = [e for e in h.events if e["type"] == "mission_check"]
     assert not checks[0]["accepted"] and "exit code" in checks[0]["results"][1]["evidence"]       # reviewer said met; the exit code said no
-    fb = [m for m in sm.messages(s["id"]) if m["role"] == "user" and "[ZEUS review" in m["content"]][0]["content"]
+    fb = [m for m in sm.messages(s["id"]) if m["role"] == "user" and "[Zeus-Agent review" in m["content"]][0]["content"]
     assert "boom" in fb and "most recent failing command" in fb
 
 
@@ -302,7 +302,7 @@ async def test_printed_files_still_need_approval(harness, ws_dir, db):
 
 
 async def test_flaky_state_dependent_tests_are_caught_by_the_confirmation_run(harness, ws_dir, db):
-    """Real failure: the model's tests only passed on a clean slate (they wrote to the real todos.json), and ZEUS accepted the first run."""
+    """Real failure: the model's tests only passed on a clean slate (they wrote to the real todos.json), and Zeus-Agent accepted the first run."""
     test_py = ("import os, unittest\n"
                "class T(unittest.TestCase):\n"
                "    def test_fresh_state(self):\n"

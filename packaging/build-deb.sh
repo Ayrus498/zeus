@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the ZEUS .deb. Run from anywhere. Output: dist/zeus_<version>_amd64.deb
+# Build the Zeus-Agent .deb. Run from anywhere. Output: dist/zeus_<version>_amd64.deb
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

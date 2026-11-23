@@ -69,7 +69,7 @@ def _truncate(md: str) -> tuple[str, int]:
     k = cut.rfind("\n\n")
     cut = cut[:k] if k > MAX_MD_BYTES * 0.6 else cut
     omitted = len(md) - len(cut)
-    return cut.rstrip() + f"\n\n> [ZEUS: the converted document was cut at {MAX_MD_BYTES // 1000} KB; {omitted:,} characters were omitted]\n", omitted
+    return cut.rstrip() + f"\n\n> [Zeus-Agent: the converted document was cut at {MAX_MD_BYTES // 1000} KB; {omitted:,} characters were omitted]\n", omitted
 
 
 def _run_worker(path: str, ext: str, timeout: int) -> dict:

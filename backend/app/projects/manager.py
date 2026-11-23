@@ -1,5 +1,5 @@
 from __future__ import annotations
-"""Projects are references to real folders; ZEUS never copies project content."""
+"""Projects are references to real folders; Zeus-Agent never copies project content."""
 import os
 import subprocess
 from pathlib import Path

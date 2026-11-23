@@ -49,7 +49,7 @@ export function timelineFromMessages(msgs: Awaited<ReturnType<typeof api.message
         out.push({ kind: "mission", mid: Number(mk[1]), name: mk[2], title: mk[2], objective: "", criteria: [], status: "stopped", round: 0, maxRounds: 0, plan: {}, feedback: "", summary: "", doc });
       } else if (/^<!--zeus:feedback round=(\d+)-->/.test(m.content)) {
         const r = /^<!--zeus:feedback round=(\d+)-->/.exec(m.content)![1];
-        out.push({ kind: "notice", level: "info", text: `ZEUS review (round ${r}): not accepted yet. The unmet criteria were sent back to the agent.` });
+        out.push({ kind: "notice", level: "info", text: `Zeus-Agent review (round ${r}): not accepted yet. The unmet criteria were sent back to the agent.` });
       } else out.push({ kind: "user", text: m.content });
     }
     else if (m.role === "assistant") {

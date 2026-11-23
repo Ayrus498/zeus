@@ -210,7 +210,7 @@ class AgentEngine:
                             denied = True
                     if saved:
                         acted = wrote = True
-                        nudge = (f"ZEUS saved the file(s) you printed ({', '.join(saved)}) because you did not call a tool. From now on call create_file yourself "
+                        nudge = (f"Zeus-Agent saved the file(s) you printed ({', '.join(saved)}) because you did not call a tool. From now on call create_file yourself "
                                  "(with the complete content). Continue the mission: create any files that are still missing, then run the tests with run_command.")
                         continue
                 if require_action and tools_on and not acted and not denied and act_nudges < 2:

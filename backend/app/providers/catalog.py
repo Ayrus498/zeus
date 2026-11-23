@@ -1,10 +1,10 @@
-"""Curated catalog of well-known models in the Ollama library, with purposes and ZEUS-fit guidance.
+"""Curated catalog of well-known models in the Ollama library, with purposes and fit guidance for Zeus-Agent.
 
 This is a hand-maintained snapshot, not a live feed: sizes are approximate download sizes of the default
 quantization (Q4) in GB, and capability flags are indicative. Installed models are always checked against Ollama's own
 metadata (/api/show) when selected. Every entry links to https://ollama.com/library/<name> for the authoritative page.
 
-fit (for the ZEUS coding agent, which needs reliable tool calling):
+fit (for the Zeus-Agent coding agent, which needs reliable tool calling):
   best    - strong coding / agent model with native tool calls
   good    - works well for chat or reasoning, tool use is fair
   limited - usable but weak at multi-step tool use (tiny or reasoning-only models)
@@ -33,7 +33,7 @@ def _m(name, title, maker, desc, best_for, purposes, fit, tags, caps=(), ctx=Non
 CATALOG: list[dict] = [
     # ---------------- coding / agent
     _m("qwen3-coder", "Qwen3 Coder", "Alibaba", "Mixture-of-experts coding model built for agentic workflows and tool calling.",
-       "Best all-round pick for ZEUS: multi-file edits, running commands, long agent runs.", ["coding", "agent"], "best",
+       "Best all-round pick for Zeus-Agent: multi-file edits, running commands, long agent runs.", ["coding", "agent"], "best",
        [("30b", 19, True)], ["tools"], "256K", "Needs ~20 GB of combined VRAM+RAM; runs partly on CPU on smaller GPUs."),
     _m("qwen2.5-coder", "Qwen2.5 Coder", "Alibaba", "Code-specialised Qwen2.5 in many sizes; strong at generation, repair and explanation.",
        "Great coding quality per GB. 7B/14B are the sweet spot for 8-16 GB GPUs.", ["coding", "agent", "small"], "best",
@@ -73,7 +73,7 @@ CATALOG: list[dict] = [
        [("0.5b", 0.4), ("1.5b", 1.0), ("3b", 1.9), ("7b", 4.7, True), ("14b", 9.0), ("32b", 20), ("72b", 47)], ["tools"], "32K"),
     _m("gemma3", "Gemma 3", "Google", "Google's multimodal models (text + images from 4B up) with large context.",
        "Writing, summarising and image questions; good quality for its size.", ["chat", "vision", "multilingual"], "good",
-       [("1b", 0.8), ("4b", 3.3, True), ("12b", 8.1), ("27b", 17)], ["vision"], "128K", "No native tool calling; ZEUS falls back to text-format tool calls."),
+       [("1b", 0.8), ("4b", 3.3, True), ("12b", 8.1), ("27b", 17)], ["vision"], "128K", "No native tool calling; Zeus-Agent falls back to text-format tool calls."),
     _m("gemma2", "Gemma 2", "Google", "Efficient Google models, strong for their size.",
        "Lightweight chat and writing.", ["chat", "small"], "limited", [("2b", 1.6), ("9b", 5.4, True), ("27b", 16)], [], "8K"),
     _m("mistral", "Mistral 7B", "Mistral AI", "Fast, capable 7B model with tool support.",
@@ -102,7 +102,7 @@ CATALOG: list[dict] = [
        "Image Q&A on modest hardware.", ["vision", "small"], "limited", [("8b", 5.5, True)], ["vision"], "32K"),
     # ---------------- embeddings
     _m("nomic-embed-text", "Nomic Embed Text", "Nomic AI", "High-quality text embedding model with long context.",
-       "Semantic search / RAG (planned for a later ZEUS phase). Cannot chat.", ["embedding"], "no", [("latest", 0.27, True)], ["embedding"], "8K"),
+       "Semantic search / RAG (planned for a later Zeus-Agent phase). Cannot chat.", ["embedding"], "no", [("latest", 0.27, True)], ["embedding"], "8K"),
     _m("mxbai-embed-large", "mxbai-embed-large", "Mixedbread", "State-of-the-art large English embedding model.",
        "Retrieval quality over speed. Cannot chat.", ["embedding"], "no", [("latest", 0.67, True)], ["embedding"], "512"),
     _m("bge-m3", "BGE-M3", "BAAI", "Multilingual, multi-granularity embedding model.",
@@ -114,15 +114,15 @@ CATALOG: list[dict] = [
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Detailed write-ups and example prompts shown in the Models window. `about` explains what the model is and when to pick
-# it; `examples` are prompts you can paste into ZEUS with a short note on what to expect. The live ollama.com details
+# it; `examples` are prompts you can paste into Zeus-Agent with a short note on what to expect. The live ollama.com details
 # (see modelinfo.py) are shown next to these and may be newer.
 ABOUT = {
     "qwen3-coder": "A 30B mixture-of-experts model (about 3B parameters active per token) trained specifically for agentic coding: reading a repository, planning edits, calling tools and fixing its own test failures. It keeps long sessions coherent thanks to a 256K context window. Because only a few experts run per token it is far faster than a dense 30B model, but the whole file still has to fit in memory (about 19 GB), so on smaller GPUs part of it runs on the CPU.",
     "qwen2.5-coder": "Alibaba's code-specialised Qwen2.5 family, available from 1.5B to 32B. It writes, explains and repairs code in dozens of languages and handles tool calls well. The 7B and 14B sizes give the best quality per GB of memory, which makes them the practical choice for laptops and 8-16 GB GPUs. Use the 32B if you have the memory and want the strongest code quality in this family.",
     "devstral": "Mistral's 24B model built with All Hands AI for software-engineering agents. It is tuned to explore a codebase, edit several files and run commands, rather than just answer coding questions. It is a good fit when the task is a change across a repository instead of a single function.",
-    "deepseek-coder-v2": "A mixture-of-experts code model from DeepSeek that supports over 300 programming languages and long files. It writes solid completions and explanations, but its tool calling is less dependable than Qwen's coder models, so ZEUS may need its text-format fallback for multi-step runs.",
+    "deepseek-coder-v2": "A mixture-of-experts code model from DeepSeek that supports over 300 programming languages and long files. It writes solid completions and explanations, but its tool calling is less dependable than Qwen's coder models, so Zeus-Agent may need its text-format fallback for multi-step runs.",
     "codellama": "Meta's code-tuned Llama 2. It is an older generation: good for short scripts, completions and explaining snippets, but it does not drive multi-step tool use reliably. Pick it only when you need something light and familiar.",
-    "starcoder2": "A pure code-completion model trained on 600+ languages. It continues code well, but it is not an instruction-following chat model, so it is a poor choice for the ZEUS agent loop.",
+    "starcoder2": "A pure code-completion model trained on 600+ languages. It continues code well, but it is not an instruction-following chat model, so it is a poor choice for the Zeus-Agent agent loop.",
     "granite-code": "IBM's Apache-licensed code models for generation, explanation and bug fixing. The 3B and 8B sizes run on modest hardware, which suits teams that need a permissive licence.",
     "qwen3": "A general model family with a switchable thinking mode: it can reason step by step for hard questions or answer directly for quick ones, and it supports tool calling at every size. 8B is a strong default for planning plus code on a single GPU; 14B and 32B are noticeably better at long plans. Sizes below 4B are fast but too weak for agent work.",
     "deepseek-r1": "A reasoning model that writes out a long chain of thought before it answers. The sizes on Ollama are distilled from the full model into Qwen and Llama bases. It is excellent for maths, logic puzzles and tracking down subtle bugs, but it is slow because it thinks first, and tool calling is weaker than Qwen3, so use it for thinking steps rather than driving the whole agent.",
@@ -132,7 +132,7 @@ ABOUT = {
     "llama3.2": "Compact 1B and 3B Llama models for phones and laptops. Good for summaries, rewriting and short answers; too small to run multi-step agent work reliably.",
     "llama3.3": "A 70B model that matches the quality of much larger Llama models. Excellent general chat and instruction following if you have 48 GB or more of combined memory.",
     "qwen2.5": "A general-purpose multilingual family from 0.5B to 72B. It is especially good at following formats: JSON output, tables and structured summaries. A solid choice for non-coding text work in many languages.",
-    "gemma3": "Google's multimodal family: from 4B up it accepts images as well as text, with a 128K context. It writes clearly and describes pictures well. It has no native tool calling, so ZEUS falls back to text-format tool calls, which is slower and less reliable.",
+    "gemma3": "Google's multimodal family: from 4B up it accepts images as well as text, with a 128K context. It writes clearly and describes pictures well. It has no native tool calling, so Zeus-Agent falls back to text-format tool calls, which is slower and less reliable.",
     "gemma2": "An efficient earlier Gemma. A good lightweight writer and chatter, with a short 8K context and no tool support.",
     "mistral": "A fast 7B model with tool support. It is a good everyday assistant on a modest GPU, and a reasonable first model to try for light automation.",
     "mistral-nemo": "A 12B model built with NVIDIA that handles 128K tokens of context and many languages. A good pick for working through long documents.",
@@ -140,12 +140,12 @@ ABOUT = {
     "phi4": "Microsoft's 14B model, trained heavily on reasoning-style data. It punches above its size on logic and Q&A, but its 16K context and lack of tool calling limit agent use.",
     "phi3": "Small Microsoft models (mini is about 3.8B) that perform well for their size. Useful for low-memory chat and classification.",
     "smollm2": "Tiny models from 135M to 1.7B parameters made for devices with very little memory. Good for experiments and quick transformations, not for agent work.",
-    "tinyllama": "A 1.1B model that is mainly useful as a smoke test: it loads in seconds so you can check that Ollama and ZEUS are wired up correctly.",
+    "tinyllama": "A 1.1B model that is mainly useful as a smoke test: it loads in seconds so you can check that Ollama and Zeus-Agent are wired up correctly.",
     "llama3.2-vision": "Llama 3.2 with an image encoder. Give it a screenshot, chart or diagram and ask questions about it. It is better at describing and reasoning about pictures than reading dense text.",
     "llava": "A popular open vision-language model. It describes images and answers simple questions about them; it is older and less accurate on text in images than newer vision models.",
     "qwen2.5vl": "A vision-language model that is particularly good with documents, charts, tables and UI screenshots, and can locate things within an image. A strong choice for reading mock-ups and scanned pages.",
     "minicpm-v": "An efficient 8B multimodal model that runs on modest hardware and handles image Q&A and OCR-style tasks reasonably well.",
-    "nomic-embed-text": "An embedding model: it turns text into vectors so that similar passages can be found by meaning. It cannot chat. ZEUS keeps it listed because semantic search over a project is planned; today it is only useful to other tools that talk to Ollama.",
+    "nomic-embed-text": "An embedding model: it turns text into vectors so that similar passages can be found by meaning. It cannot chat. Zeus-Agent keeps it listed because semantic search over a project is planned; today it is only useful to other tools that talk to Ollama.",
     "mxbai-embed-large": "A large English embedding model that favours retrieval quality over speed. It cannot chat.",
     "bge-m3": "A multilingual embedding model that handles many languages and long passages. It cannot chat.",
     "all-minilm": "A very small, fast embedding model for lightweight similarity search. It cannot chat.",
@@ -202,7 +202,7 @@ EXAMPLE_SETS = {
         {"prompt": "Classify this message as bug, feature request or question: <paste text>",
          "shows": "A one-word label, suitable for simple automation."},
         {"prompt": "Say hello in five languages.",
-         "shows": "A quick smoke test that Ollama and ZEUS are connected."},
+         "shows": "A quick smoke test that Ollama and Zeus-Agent are connected."},
     ],
 }
 
