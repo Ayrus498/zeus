@@ -9,7 +9,8 @@
 - Run, execute and launch now mean executing a file for the agent (it runs `./swap.out` instead of reading it).
 
 ### Download and upgrade
-`zeus_0.2.1_amd64.deb` (Ubuntu/Debian amd64). SHA-256: see the checksum line added after the build below.
+`zeus_0.2.1_amd64.deb` (about 107 MiB, Ubuntu/Debian amd64)  
+SHA-256: `619989c033055aa339c5f12b99ec519e1a08eb6bf8866b4e6c198aedce8f61bb`
 ```bash
 sudo apt install --reinstall ./zeus_0.2.1_amd64.deb
 ```
