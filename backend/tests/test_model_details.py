@@ -82,7 +82,7 @@ async def test_fetch_404_and_bad_family(monkeypatch):
     _mock(monkeypatch, lambda r: httpx.Response(404, text="nope"))
     r = await modelinfo.fetch("hf-only-model", FakeDB(), force=True)
     assert r["source"] == "offline" and "not in the public" in r["error"]
-    for bad in ("../etc", "a/b", "", "Q W", "x" * 200):
+    for bad in ("../etc", "a/b/c", "", "Q W", "x" * 200, "/a", "a/"):
         with pytest.raises(ValueError):
             await modelinfo.fetch(bad)
 

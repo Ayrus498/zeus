@@ -1,10 +1,11 @@
-import type { Catalog, CatalogModel, Fit, ModelInfo, Overview } from "../services/types";
+import type { Catalog, CatalogModel, Fit, LibraryEntry, ModelInfo, Overview } from "../services/types";
 
 /** Left-panel families of the Models window. Order here is the display order. */
 export const GROUPS: Array<{ id: string; label: string }> = [
   { id: "qwen", label: "Qwen" }, { id: "deepseek", label: "DeepSeek" }, { id: "llama", label: "Llama" }, { id: "gemma", label: "Gemma" },
   { id: "mistral", label: "Mistral" }, { id: "phi", label: "Phi" }, { id: "openai", label: "OpenAI" }, { id: "granite", label: "IBM Granite" },
   { id: "embeddings", label: "Embeddings" }, { id: "other", label: "Other" },
+  { id: "library", label: "Ollama library" },                // every other model on ollama.com/library, plus search results
 ];
 
 const bare = (name: string) => name.toLowerCase();
@@ -43,14 +44,19 @@ export function catalogFamily(name: string, catalog: CatalogModel[]): CatalogMod
 
 export type Item =
   | { key: string; kind: "catalog"; label: string; group: string; model: CatalogModel; installed: ModelInfo[]; loaded: boolean }
-  | { key: string; kind: "installed"; label: string; group: string; info: ModelInfo; installed: ModelInfo[]; loaded: boolean };
+  | { key: string; kind: "installed"; label: string; group: string; info: ModelInfo; installed: ModelInfo[]; loaded: boolean }
+  | { key: string; kind: "library"; label: string; group: string; entry: LibraryEntry; installed: ModelInfo[]; loaded: boolean };
 
 export interface GroupView { id: string; label: string; items: Item[] }
 
 const FIT_ORDER: Record<Fit, number> = { best: 0, good: 1, limited: 2, no: 3 };
 
-/** Every catalog model plus every installed model that no catalog entry covers, grouped by family. */
-export function buildItems(catalog: Catalog | null, ov: Overview | null): Item[] {
+/** The base name of an installed model ("ornith:9b" -> "ornith", "user/model:q4" -> "user/model"). */
+const baseName = (name: string) => bare(name).split(":")[0];
+
+/** Every catalog model, every library model the guide does not cover (the public Ollama library and any search results), and every
+ * installed model that neither covers; installed models are attached to the family they belong to. */
+export function buildItems(catalog: Catalog | null, ov: Overview | null, library: LibraryEntry[] = [], found: LibraryEntry[] = []): Item[] {
   const models = catalog?.models ?? [];
   const installed = ov?.installed ?? [];
   const loaded = new Set((ov?.loaded ?? []).map((l) => norm(l.name)));
@@ -65,22 +71,41 @@ export function buildItems(catalog: Catalog | null, ov: Overview | null): Item[]
     const inst = byFamily.get(m.name) ?? [];
     return { key: `cat:${m.name}`, kind: "catalog", label: m.title, group: groupOf(m.name), model: m, installed: inst, loaded: inst.some((i) => loaded.has(norm(i.name))) };
   });
-  for (const o of orphans) items.push({ key: `inst:${o.name}`, kind: "installed", label: o.name, group: groupOf(o.name), info: o, installed: [o], loaded: loaded.has(norm(o.name)) });
+  const covered = new Set(models.map((m) => bare(m.name)));
+  const taken = new Set<string>();
+  for (const e of [...library, ...found]) {
+    const id = bare(e.name);
+    if (covered.has(id)) continue;                                       // the curated guide already describes it
+    covered.add(id);
+    const inst = orphans.filter((o) => baseName(o.name) === id);
+    inst.forEach((o) => taken.add(o.name));
+    items.push({ key: `lib:${id}`, kind: "library", label: e.name, group: "library", entry: e, installed: inst, loaded: inst.some((i) => loaded.has(norm(i.name))) });
+  }
+  for (const o of orphans) {
+    if (taken.has(o.name)) continue;
+    items.push({ key: `inst:${o.name}`, kind: "installed", label: o.name, group: groupOf(o.name), info: o, installed: [o], loaded: loaded.has(norm(o.name)) });
+  }
   return items;
 }
 
 const haystack = (it: Item): string =>
   it.kind === "catalog"
     ? [it.model.name, it.model.title, it.model.maker, it.model.description, it.model.best_for, ...it.model.purposes, ...it.model.capabilities, ...it.model.tags.map((t) => t.tag), ...it.installed.map((i) => i.name)].join(" ").toLowerCase()
-    : [it.info.name, it.info.family ?? "", it.info.parameter_size ?? "", it.info.quantization ?? ""].join(" ").toLowerCase();
+    : it.kind === "library"
+      ? [it.entry.name, it.entry.description, ...it.entry.capabilities, ...it.entry.sizes, it.entry.community ? "community" : "official"].join(" ").toLowerCase()
+      : [it.info.name, it.info.family ?? "", it.info.parameter_size ?? "", it.info.quantization ?? ""].join(" ").toLowerCase();
 
 /** Apply the search box and the "installed only" toggle, group, and order (best fit first; installed-only models last). */
 export function groupItems(items: Item[], query: string, installedOnly: boolean): GroupView[] {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   const keep = items.filter((it) => (!installedOnly || it.installed.length > 0) && terms.every((t) => haystack(it).includes(t)));
+  const q = query.trim().toLowerCase();
+  /** Library order: a name that is the search, then one that starts with it, then the most pulled. */
+  const libRank = (e: LibraryEntry) => (q && e.name.toLowerCase() === q ? 0 : q && e.name.toLowerCase().startsWith(q) ? 1 : 2);
   return GROUPS.map((g) => ({
     id: g.id, label: g.label,
     items: keep.filter((it) => it.group === g.id).sort((a, b) => {
+      if (a.kind === "library" && b.kind === "library") return libRank(a.entry) - libRank(b.entry) || Number(a.entry.community) - Number(b.entry.community) || b.entry.pulls_n - a.entry.pulls_n || a.label.localeCompare(b.label);
       if (a.kind !== b.kind) return a.kind === "catalog" ? -1 : 1;
       if (a.kind === "catalog" && b.kind === "catalog") return FIT_ORDER[a.model.fit] - FIT_ORDER[b.model.fit] || a.label.localeCompare(b.label);
       return a.label.localeCompare(b.label);

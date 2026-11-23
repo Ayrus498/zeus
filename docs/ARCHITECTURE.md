@@ -100,3 +100,16 @@ and `prepare_messages()` shapes the conversation (text tool protocol for models 
 instance with `enable_builtins=False` and registers only the allowed converters (plain text only for txt/json/xml/zip/md), sets rlimits, imports the heavy libraries,
 THEN blocks sockets (replacing `socket.socket` before importing would break `ssl`), and prints one JSON object. The API returns Markdown to the caller and stores nothing.
 The frontend treats the result as an ordinary attachment (`name = <file>.md`), so missions, previews and the `.md`-only WebSocket check need no special cases.
+
+
+## Model library (every model on ollama.com)
+
+`backend/app/providers/library.py`. The curated catalogue (`catalog.py`) describes about 30 families in depth; everything else in the public Ollama library is listed
+from ollama.com itself so new models appear without a Zeus-Agent update. `fetch_library()` parses https://ollama.com/library (name, description, capability badges, sizes,
+pulls, tags, updated), caches it for 6 hours and keeps the last good copy in the settings table for offline use; a page that yields fewer than 20 entries is treated as
+unreadable. `search()` parses https://ollama.com/search?q= (official models and community `user/model` entries) with a 10 minute memory cache and sends only the typed text
+(no cookies, project or path data; the request has a test). `modelinfo.fetch()` serves details for a family (`/library/<name>`) or a community model (`/<user>/<name>`) and
+parses its version list. The UI builds one item list from the catalogue, the library and the search results (`frontend/src/lib/modelGroups.ts`), attaches installed models
+to their family and orders the library by popularity (by relevance while searching). Download uses the existing pull endpoint with the exact tag, so the same progress and
+fit logic applies. Community models are marked and carry a warning because neither Ollama nor Zeus-Agent reviews them.
+

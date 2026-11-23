@@ -41,6 +41,7 @@ Priority: **M** must, **S** should. Verification evidence names the suite or che
 | FR-01 | **Projects.** Add an existing folder or create an empty one, switch between projects, remove a project from the list without touching files. Acceptance: files stay on disk after removal; recent projects survive a restart. | M | A3, A4 | `test_api.py`, `test_zeusdir.py` |
 | FR-02 | **Ollama integration.** Discover installed models dynamically (none hard-coded), show connection status and version, let the user set the endpoint, choose a model and a context window. Acceptance: with Ollama stopped the UI explains how to start it; models appear as soon as they are installed. | M | A3, A4 | `test_api.py`, `test_models_library.py` |
 | FR-03 | **Model management.** Browse a curated, searchable model guide grouped by family, with purpose, examples and live details from ollama.com; download with progress, unload, and uninstall installed models with a confirmation. Acceptance: uninstalling removes only the chosen model; an in-progress download cannot be uninstalled. | S | A3, A4 | `test_model_details.py`, `test_models_library.py` |
+| FR-03a | **The whole Ollama library.** Every family on ollama.com/library is listed in the Models window (not only the curated guide), searchable together with community models, each with description, capabilities, sizes, an `ollama pull` command and a Download button per version. Acceptance: a model that exists only in the public library (for example `ornith`) can be found, opened and pulled; community models are marked with a warning; only the typed search text is sent to ollama.com; with no network the last copy is shown. | S | A3, A4 | `test_library.py`, `modelGroups.test.ts`, `scripts/e2e_models_library.py` |
 | FR-04 | **Auto model mode.** Optionally pick a coding or a reasoning model per prompt from the installed models, with a stated reason, avoiding needless reloads. Acceptance: reasoning-only models run without tools; pins override scoring. | S | A3 | `test_auto_router.py` |
 
 ### The agent
@@ -73,7 +74,7 @@ Priority: **M** must, **S** should. Verification evidence names the suite or che
 
 | ID | Requirement | Measure |
 |---|---|---|
-| NFR-01 | **Privacy.** No telemetry; the only network traffic is to the configured Ollama endpoint and, on request, ollama.com for model details. | code review; no other outbound calls in `backend/app` |
+| NFR-01 | **Privacy.** No telemetry; the only network traffic is to the configured Ollama endpoint and, on request, ollama.com for the model library, model details and the search text the user types in the Models window. | code review; no other outbound calls in `backend/app` |
 | NFR-02 | **Safety by construction.** Mutating tools cannot bypass the permission engine; backend enforcement does not depend on the UI. | `test_permissions.py`, security review (A8) |
 | NFR-03 | **Responsiveness.** The UI stays usable while tokens stream; scrolling, typing and approving are never blocked by generation. | browser check (FR-16) |
 | NFR-04 | **Resilience.** The backend recreates a deleted database and restores state from `.zeus/`; a failed detached launch falls back to running in the terminal. | `test_zeusdir.py`, launcher checks |

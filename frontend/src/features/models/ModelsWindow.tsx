@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as D from "@radix-ui/react-dialog";
-import { ChevronDown, ChevronRight, Boxes, ChevronsDownUp, ChevronsUpDown, Loader2, Search, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Boxes, ChevronsDownUp, ChevronsUpDown, Loader2, RefreshCw, Search, X } from "lucide-react";
 import { api } from "../../services/api";
 import { useApp } from "../../stores/app";
 import { cn } from "../../lib/utils";
 import { buildItems, groupItems, type Item } from "../../lib/modelGroups";
-import type { Catalog } from "../../services/types";
+import type { Catalog, LibraryList, LibrarySearch } from "../../services/types";
 import { AutoModeCard } from "./AutoModeCard";
 import { ModelDetail } from "./ModelDetail";
 import { ACTIVE, Chip, Downloads, FIT, Installed } from "./ModelParts";
@@ -14,8 +14,14 @@ import { SetupGuide } from "./SetupGuide";
 const STORE_KEY = "zeus.models.collapsed";
 const OVERVIEW = "overview";
 
+/** Families start expanded, except the long Ollama library list, until the user chooses otherwise. */
 function loadCollapsed(): Set<string> {
-  try { const v = JSON.parse(localStorage.getItem(STORE_KEY) ?? "[]"); return new Set(Array.isArray(v) ? v.filter((x) => typeof x === "string") : []); } catch { return new Set(); }
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw === null) return new Set(["library"]);
+    const v = JSON.parse(raw);
+    return new Set(Array.isArray(v) ? v.filter((x) => typeof x === "string") : []);
+  } catch { return new Set(["library"]); }
 }
 function saveCollapsed(s: Set<string>) { try { localStorage.setItem(STORE_KEY, JSON.stringify([...s])); } catch { /* storage unavailable */ } }
 
@@ -27,6 +33,8 @@ function Row({ item, selected, onSelect, downloading }: { item: Item; selected: 
       <span className={cn("min-w-0 flex-1 truncate", item.kind === "installed" && "font-mono")}>{item.label}</span>
       {downloading && <Loader2 size={11} className="shrink-0 animate-spin text-accent" aria-label="downloading" />}
       {item.loaded && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" title="Loaded in memory" />}
+      {item.kind === "library" && item.entry.community && <span className="shrink-0 rounded bg-warn/15 px-1 text-[9px] text-warn" title="Published by a Ollama user, not by Ollama">community</span>}
+      {item.kind === "library" && item.entry.capabilities.includes("tools") && <span className="shrink-0 text-[9px] text-muted" title="Supports tool calling">tools</span>}
       {item.installed.length > 0 && <span className="shrink-0 text-[10px] text-ok" title={`${item.installed.length} installed`}>✓{item.installed.length > 1 ? item.installed.length : ""}</span>}
       {fit === "best" && <span className="shrink-0 rounded bg-accent px-1 text-[9px] text-accent-foreground" title={FIT.best.hint}>best</span>}
     </button>
@@ -42,6 +50,11 @@ export function ModelsWindow() {
   const [installedOnly, setInstalledOnly] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
   const [sel, setSel] = useState<string>(OVERVIEW);
+  const [library, setLibrary] = useState<LibraryList | null>(null);
+  const [libBusy, setLibBusy] = useState(false);
+  const [remote, setRemote] = useState<LibrarySearch | null>(null);
+  const [remoteBusy, setRemoteBusy] = useState(false);
+  const [pinned, setPinned] = useState<Item | null>(null);
   const search = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -50,7 +63,28 @@ export function ModelsWindow() {
     if (!catalog) api.catalog().then(setCatalog).catch((e) => setCatErr(String(e instanceof Error ? e.message : e)));
   }, [modelsOpen, refreshOverview, catalog]);
 
-  const items = useMemo(() => buildItems(catalog, ov), [catalog, ov]);
+  // The whole public Ollama library (not only the built-in guide), loaded once per opening and refreshable.
+  const loadLibrary = (refresh: boolean) => {
+    setLibBusy(true);
+    api.libraryList(refresh).then(setLibrary).catch((e) => setLibrary({ models: [], fetched_at: null, source: "offline", error: String(e instanceof Error ? e.message : e) })).finally(() => setLibBusy(false));
+  };
+  useEffect(() => { if (modelsOpen && !library) loadLibrary(false); }, [modelsOpen]);       // eslint-disable-line react-hooks/exhaustive-deps
+
+  // What is typed here is also searched on ollama.com (official and community models), after a short pause.
+  const typed = query.trim();
+  useEffect(() => {
+    if (!modelsOpen || typed.length < 2) { setRemote(null); setRemoteBusy(false); return; }
+    setRemoteBusy(true);
+    let stale = false;
+    const t = setTimeout(() => {
+      api.searchLibrary(typed).then((r) => { if (!stale) setRemote(r); }).catch((e) => { if (!stale) setRemote({ query: typed, models: [], source: "offline", error: String(e instanceof Error ? e.message : e) }); })
+        .finally(() => { if (!stale) setRemoteBusy(false); });
+    }, 400);
+    return () => { stale = true; clearTimeout(t); };
+  }, [typed, modelsOpen]);
+
+  const found = useMemo(() => (remote && remote.query === typed ? remote.models : []), [remote, typed]);
+  const items = useMemo(() => buildItems(catalog, ov, library?.models ?? [], found), [catalog, ov, library, found]);
   const groups = useMemo(() => groupItems(items, query, installedOnly), [items, query, installedOnly]);
   const searching = query.trim().length > 0;
   const isOpen = (id: string) => searching || !collapsed.has(id);          // a search always shows what it found
@@ -59,8 +93,9 @@ export function ModelsWindow() {
 
   const downloading = useMemo(() => new Set((ov?.downloads ?? []).filter((d) => ACTIVE.includes(d.status)).map((d) => d.model)), [ov]);
   const activeCount = downloading.size;
-  const selected = items.find((i) => i.key === sel) ?? null;
-  const isDownloading = (it: Item) => it.kind === "catalog" && it.model.tags.some((t) => downloading.has(t.tag));
+  const selected = items.find((i) => i.key === sel) ?? (pinned && pinned.key === sel ? pinned : null);   // a search result stays open after the search changes
+  const isDownloading = (it: Item) => (it.kind === "catalog" && it.model.tags.some((t) => downloading.has(t.tag)))
+    || (it.kind === "library" && [...downloading].some((d) => d === it.entry.name || d.startsWith(`${it.entry.name}:`)));
 
   return (
     <D.Root open={modelsOpen} onOpenChange={setModelsOpen}>
@@ -110,13 +145,27 @@ export function ModelsWindow() {
                         {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}{g.label}
                         <span className="ml-auto flex items-center gap-1.5 font-mono text-[10px] font-normal normal-case">{inst > 0 && <span className="text-ok">{inst} installed</span>}<span>{g.items.length}</span></span>
                       </button>
-                      {open && g.items.map((it) => <Row key={it.key} item={it} selected={sel === it.key} onSelect={() => setSel(it.key)} downloading={isDownloading(it)} />)}
+                      {open && g.items.map((it) => <Row key={it.key} item={it} selected={sel === it.key} onSelect={() => { setSel(it.key); setPinned(it); }} downloading={isDownloading(it)} />)}
                     </div>);
                 })}
                 {catalog && !groups.length && <div className="px-3 py-6 text-center text-xs text-muted">No models match{query ? ` “${query}”` : ""}.</div>}
                 {!catalog && <div className="px-3 py-6 text-center text-xs text-muted">{catErr ? <span className="text-danger">Could not load the model guide: {catErr}</span> : "Loading model guide…"}</div>}
               </div>
-              <div className="border-t border-border px-3 py-1.5 text-[10px] text-muted">{catalog ? catalog.note : ""}</div>
+              <div className="space-y-1 border-t border-border px-3 py-1.5 text-[10px] text-muted" data-testid="library-status">
+                {searching && remoteBusy && <div className="flex items-center gap-1"><Loader2 size={10} className="animate-spin" />Searching ollama.com…</div>}
+                {searching && !remoteBusy && remote?.error && <div className="text-warn">{remote.error} Showing models already loaded.</div>}
+                {searching && !remoteBusy && remote && !remote.error && <div>{found.length} result{found.length === 1 ? "" : "s"} on ollama.com for “{typed}”.</div>}
+                <div className="flex items-center gap-1.5">
+                  <span className="min-w-0 flex-1">
+                    {libBusy && !library ? "Loading the Ollama library…"
+                      : library && library.models.length ? `${library.models.length} models in the Ollama library${library.source === "offline-cache" ? " (offline copy)" : ""}`
+                      : library?.error ? <span className="text-warn">Could not load the Ollama library: {library.error}</span> : ""}
+                  </span>
+                  <button type="button" onClick={() => loadLibrary(true)} disabled={libBusy} aria-label="Refresh the Ollama library" title="Fetch the newest list from ollama.com"
+                    className="cursor-pointer rounded p-1 text-muted hover:bg-surface-2 hover:text-foreground disabled:opacity-50"><RefreshCw size={11} className={libBusy ? "animate-spin" : ""} /></button>
+                </div>
+                {catalog && <div>{catalog.note}</div>}
+              </div>
             </nav>
             {/* ------------------------------------------------ right: details */}
             <main className="min-w-0 flex-1 overflow-auto p-5">

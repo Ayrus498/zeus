@@ -44,6 +44,13 @@ export interface LibraryInfo {
   tags: { tag: string; size: string | null; context: string | null; latest: boolean; kind: string | null; updated: string | null }[];
   source: "live" | "cache" | "offline-cache" | "offline"; fetched_at?: number; error?: string | null;
 }
+/** One model family from the public Ollama library (or a community model found by searching ollama.com). */
+export interface LibraryEntry {
+  name: string; description: string; capabilities: string[]; sizes: string[]; pulls: string; pulls_n: number;
+  tags: number | null; updated: string | null; community: boolean; url: string;
+}
+export interface LibraryList { models: LibraryEntry[]; fetched_at: number | null; source: "live" | "cache" | "offline-cache" | "offline"; error?: string | null }
+export interface LibrarySearch { query: string; models: LibraryEntry[]; source: "live" | "cache" | "offline" | "none"; error: string | null }
 export interface Catalog { purposes: Record<string, string>; library_url: string; models: CatalogModel[]; note: string }
 export interface DownloadRow {
   id: number; model: string; status: "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted"; detail: string;

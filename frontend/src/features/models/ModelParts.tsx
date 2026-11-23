@@ -122,20 +122,21 @@ export function TagRow({ t, family, ov, dl }: { t: CatalogModel["tags"][number];
   const installed = installedNames.has(norm(t.tag)) || (t.latest && installedNames.has(`${family}:latest`));
   const loadedHit = ov.loaded.some((l) => norm(l.name) === norm(t.tag) || (t.latest && norm(l.name) === `${family}:latest`));
   const loadedName = ov.loaded.find((l) => norm(l.name) === norm(t.tag) || (t.latest && norm(l.name) === `${family}:latest`))?.name ?? t.tag;
-  const place = placement(t.size_gb, ov.hardware);
+  const place = t.size_gb > 0 ? placement(t.size_gb, ov.hardware) : "unknown";
+  const label = t.tag.slice(family.length + 1) || t.tag;
   const pl = PLACEMENT_LABEL[place];
   const active = dl && ACTIVE.includes(dl.status);
   return (
     <div className="flex items-center gap-2 py-1 text-xs">
-      <span className="min-w-0 flex-1 truncate font-mono">{t.tag.slice(family.length + 1)}{t.latest && <span className="ml-1 text-[10px] text-muted">(latest)</span>}</span>
-      <span className="w-14 shrink-0 text-right font-mono text-muted">{fmtGb(t.size_gb)}</span>
+      <span className="min-w-0 flex-1 truncate font-mono">{label}{t.latest && label !== "latest" && <span className="ml-1 text-[10px] text-muted">(latest)</span>}</span>
+      <span className="w-14 shrink-0 text-right font-mono text-muted">{t.size_gb > 0 ? fmtGb(t.size_gb) : "–"}</span>
       <span className="w-[62px] shrink-0 text-center">{pl.text && !installed ? <Chip cls={pl.cls} title={pl.hint}>{pl.text}</Chip> : null}</span>
       <span className="flex w-[132px] shrink-0 justify-end gap-1">
         {active ? <span className="flex items-center gap-1 font-mono text-[11px] text-accent"><Loader2 size={11} className="animate-spin" />{dl!.percent != null ? `${Math.round(dl!.percent)}%` : "…"}</span>
           : installed ? <>
               {loadedHit ? <Button size="sm" variant="outline" onClick={() => void unloadModel(loadedName)}><PowerOff size={11} /> Unload</Button> : <Chip cls="bg-ok/15 text-ok"><Check size={10} className="mr-0.5 inline" />installed</Chip>}
             </>
-          : <Button size="sm" disabled={!ov.connected} title={ov.connected ? `Download ${t.tag} (~${fmtGb(t.size_gb)})` : "Ollama is not running"} onClick={() => void pullModel(t.tag)}><Download size={11} /> Download</Button>}
+          : <Button size="sm" disabled={!ov.connected} title={ov.connected ? `Download ${t.tag}${t.size_gb > 0 ? ` (~${fmtGb(t.size_gb)})` : ""}` : "Ollama is not running"} onClick={() => void pullModel(t.tag)}><Download size={11} /> Download</Button>}
       </span>
     </div>
   );

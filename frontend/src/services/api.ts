@@ -1,4 +1,4 @@
-import type { ChangeEntry, Execution, ModelInfo, ModelMeta, OllamaStatus, Project, Session, TreeNode, Mode, Policy, Metrics, Catalog, DownloadRow, Overview, AutoPlan, AutoPreview, MissionRow, ConvertFormats, ConvertResult, LibraryInfo, AboutInfo } from "./types";
+import type { ChangeEntry, Execution, ModelInfo, ModelMeta, OllamaStatus, Project, Session, TreeNode, Mode, Policy, Metrics, Catalog, DownloadRow, Overview, AutoPlan, AutoPreview, MissionRow, ConvertFormats, ConvertResult, LibraryInfo, LibraryList, LibrarySearch, AboutInfo } from "./types";
 
 export const API = (import.meta.env.VITE_ZEUS_API as string | undefined) ?? "http://127.0.0.1:8765";
 export const WS = API.replace(/^http/, "ws");
@@ -45,7 +45,9 @@ export const api = {
   cancelDownload: (id: number) => req<{ ok: boolean }>(`/api/ollama/downloads/${id}/cancel`, "POST"),
   dismissDownload: (id: number) => req<{ ok: boolean }>(`/api/ollama/downloads/${id}`, "DELETE"),
   about: () => req<AboutInfo>("/api/about"),
-  library: (family: string, refresh = false) => req<LibraryInfo>(`/api/ollama/library/${encodeURIComponent(family)}` + q({ refresh: refresh ? "true" : undefined })),
+  library: (family: string, refresh = false) => req<LibraryInfo>(`/api/ollama/library/${family.split("/").map(encodeURIComponent).join("/")}` + q({ refresh: refresh ? "true" : undefined })),
+  libraryList: (refresh = false) => req<LibraryList>("/api/ollama/library" + q({ refresh: refresh ? "true" : undefined })),
+  searchLibrary: (query: string) => req<LibrarySearch>("/api/ollama/search" + q({ q: query })),
   deleteModel: (model: string) => req<{ ok: boolean }>("/api/ollama/delete", "POST", { model }),
   unloadModel: (model: string) => req<{ ok: boolean }>("/api/ollama/unload", "POST", { model }),
   openUrl: (url: string) => req<{ ok: boolean }>("/api/open-url", "POST", { url }),

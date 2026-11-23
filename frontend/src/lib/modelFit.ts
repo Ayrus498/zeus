@@ -23,3 +23,11 @@ export const PLACEMENT_LABEL: Record<Placement, { text: string; cls: string; hin
 };
 
 export const fmtGb = (gb: number) => (gb < 1 ? `${Math.round(gb * 1000)} MB` : `${gb % 1 === 0 ? gb : gb.toFixed(1)} GB`);
+
+/** "5.6GB" -> 5.6, "512MB" -> 0.512, "1.2TB" -> 1200; 0 when the size is not known. */
+export function parseSizeGb(size: string | null | undefined): number {
+  const m = /^([\d.]+)\s*([KMGT]?)B$/i.exec((size ?? "").trim());
+  if (!m) return 0;
+  const n = parseFloat(m[1]);
+  return Number.isFinite(n) ? n * ({ K: 1e-6, M: 1e-3, G: 1, T: 1e3 } as Record<string, number>)[m[2].toUpperCase() || "G"] : 0;
+}

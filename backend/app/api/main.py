@@ -28,7 +28,7 @@ from ..agent.router import AUTO, AutoRouter, classify, decide
 from ..persistence.zeusdir import ZeusFiles
 from ..providers import catalog as model_catalog
 from ..providers.downloads import DownloadManager
-from ..providers import modelinfo
+from ..providers import library as model_library, modelinfo
 from ..providers.ollama import OllamaError, OllamaProvider, context_warning, system_memory
 from ..sessions.manager import SessionManager
 from ..sessions.runtime import SessionRuntime
@@ -221,11 +221,21 @@ def create_app(db_path=None) -> FastAPI:
         downloads.dismiss(did)
         return {"ok": True}
 
-    @app.get("/api/ollama/library/{family}")
+    @app.get("/api/ollama/library")
+    async def ollama_library_list(refresh: bool = False):
+        """Every model family in the public Ollama library (name, description, capabilities, sizes, pulls), cached for a few hours."""
+        return await model_library.fetch_library(db, force=refresh)
+
+    @app.get("/api/ollama/search")
+    async def ollama_library_search(q: str = ""):
+        """Search the public library (official and community models). Only the typed text is sent to ollama.com."""
+        return await model_library.search(q)
+
+    @app.get("/api/ollama/library/{family:path}")
     async def ollama_library(family: str, refresh: bool = False):
-        """Latest public details (summary, README, tags, capabilities) for a model family from ollama.com."""
+        """Latest public details (summary, README, tags, capabilities) for a model family ("ornith") or community model ("user/name")."""
         try:
-            return await modelinfo.fetch(family.lower(), db, force=refresh)
+            return await modelinfo.fetch(family if "/" in family else family.lower(), db, force=refresh)
         except ValueError:
             raise HTTPException(400, "invalid model family")
 

@@ -16,7 +16,12 @@ from html.parser import HTMLParser
 import httpx
 
 BASE = "https://ollama.com/library"
-FAMILY_RE = re.compile(r"^[a-z0-9][a-z0-9._\-]{0,80}$")
+# A library family ("ornith") or a community model ("user/name"): the page lives at /library/<family> or /<user>/<name>.
+FAMILY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-]{0,80}(?:/[A-Za-z0-9][A-Za-z0-9._\-]{0,80})?$")
+
+
+def page_url(family: str) -> str:
+    return f"https://ollama.com/{family}" if "/" in family else f"{BASE}/{family}"
 TTL = 6 * 3600
 MAX_README = 7000
 _mem: dict[str, tuple[float, dict]] = {}
@@ -146,7 +151,7 @@ def parse(page: str, family: str) -> dict:
         if c not in caps:
             caps.append(c)
     tags, seen = [], set()
-    for tm in re.finditer(r'<a href="/library/([^"]+)" class="sm:hidden[^>]*>(.*?)</a>', page, re.S):
+    for tm in re.finditer(r'<a href="/(?:library/)?([^"]+)" class="sm:hidden[^>]*>(.*?)</a>', page, re.S):
         name, inner = tm.group(1), tm.group(2)
         if name in seen:
             continue
@@ -161,7 +166,7 @@ def parse(page: str, family: str) -> dict:
         if len(tags) >= 40:
             break
     um = re.search(r"Updated&nbsp;</span>\s*<span\s*>([^<]+)</span>", page)
-    return {"family": family, "url": f"{BASE}/{family}", "summary": summary, "readme": readme, "capabilities": caps,
+    return {"family": family, "url": page_url(family), "summary": summary, "readme": readme, "capabilities": caps,
             "tags": tags, "updated": um.group(1).strip() if um else None}
 
 
@@ -176,7 +181,7 @@ async def fetch(family: str, db=None, force: bool = False) -> dict:
     err = None
     try:
         async with httpx.AsyncClient(timeout=8.0, follow_redirects=True, headers={"User-Agent": "zeus-agent"}) as c:
-            r = await c.get(f"{BASE}/{family}")
+            r = await c.get(page_url(family))
         if r.status_code == 404:
             err = "This model is not in the public Ollama library."
         elif r.status_code >= 400:
@@ -202,5 +207,5 @@ async def fetch(family: str, db=None, force: bool = False) -> dict:
                 return {**json.loads(raw), "source": "offline-cache", "error": err}
         except Exception:
             pass
-    return {"family": family, "url": f"{BASE}/{family}", "summary": "", "readme": "", "capabilities": [], "tags": [],
+    return {"family": family, "url": page_url(family), "summary": "", "readme": "", "capabilities": [], "tags": [],
             "updated": None, "source": "offline", "error": err}

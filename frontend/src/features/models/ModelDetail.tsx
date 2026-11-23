@@ -9,6 +9,7 @@ import { Button } from "../../components/ui/button";
 import { ExternalLink } from "../../components/ui/external-link";
 import { useApp } from "../../stores/app";
 import { fmtBytes } from "../../lib/utils";
+import { parseSizeGb } from "../../lib/modelFit";
 import type { Catalog, LibraryInfo, ModelInfo, Overview } from "../../services/types";
 import type { Item } from "../../lib/modelGroups";
 import { ACTIVE, Chip, FIT, norm, TagRow, UninstallButton } from "./ModelParts";
@@ -45,7 +46,7 @@ const SOURCE_LABEL: Record<LibraryInfo["source"], string> = {
 };
 
 /** Latest public details for a model family, fetched from ollama.com when the model is selected. */
-function LiveDetails({ family }: { family: string }) {
+function LiveDetails({ family, ov, hideSummary = false }: { family: string; ov?: Overview; hideSummary?: boolean }) {
   const [info, setInfo] = useState<LibraryInfo | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -74,9 +75,20 @@ function LiveDetails({ family }: { family: string }) {
               {info.capabilities.map((c) => <Chip key={c} cls="bg-accent/15 text-accent">{c}</Chip>)}
             </div>
             {info.error && <div className="text-warn">{info.error}{info.source !== "offline" ? "" : " Showing the built-in guide only."}</div>}
-            {info.summary && <p className="text-sm">{info.summary}</p>}
+            {info.summary && !hideSummary && <p className="text-sm">{info.summary}</p>}
             {none && !info.error && <div className="text-muted">ollama.com has no extra details for this model.</div>}
-            {info.tags.length > 0 && (
+            {info.tags.length > 0 && ov && (
+              <div data-testid="library-versions">
+                <div className="mb-1 text-muted">Versions you can download <span className="text-[10px]">(download size, fit on this machine)</span></div>
+                <div className="divide-y divide-border/50 rounded-md border border-border bg-background px-3">
+                  {info.tags.map((t) => {
+                    const row = { tag: t.tag, size_gb: parseSizeGb(t.size), latest: t.latest };
+                    const dl = ov.downloads.filter((d) => d.model === t.tag);
+                    return <TagRow key={t.tag} t={row} family={family} ov={ov} dl={dl.find((d) => ACTIVE.includes(d.status)) ?? dl[0]} />;
+                  })}
+                </div>
+              </div>)}
+            {info.tags.length > 0 && !ov && (
               <details>
                 <summary className="cursor-pointer text-muted hover:text-foreground">Available versions on ollama.com ({info.tags.length})</summary>
                 <table className="mt-1 w-full text-[11px]"><tbody>
@@ -116,7 +128,66 @@ function Examples({ items }: { items: { prompt: string; shows: string }[] }) {
   );
 }
 
+/** What the capability badges on ollama.com mean for Zeus-Agent. */
+function capabilityNotes(caps: string[]): { text: string; warn?: boolean }[] {
+  const n: { text: string; warn?: boolean }[] = [];
+  if (caps.includes("embedding")) n.push({ text: "Embedding model: it turns text into vectors and cannot chat, so Zeus-Agent cannot use it as the coding model.", warn: true });
+  else if (caps.includes("tools")) n.push({ text: "Supports tool calling, so Zeus-Agent can use it as an agent: read, edit and run code in your project, with your approval." });
+  else n.push({ text: "No tool-calling badge: it can answer questions, but Zeus-Agent's actions (editing files, running commands) may not work reliably. Prefer a model with tools for coding.", warn: true });
+  if (caps.includes("thinking")) n.push({ text: "Thinks before it answers: slower, often better on hard problems." });
+  if (caps.includes("vision")) n.push({ text: "Can read images. Zeus-Agent sends text, so this does not change how it works here." });
+  if (caps.includes("cloud")) n.push({ text: "Cloud model: it runs on ollama.com's servers, not on your machine, needs an Ollama account and sends your prompts to Ollama. That is not local.", warn: true });
+  return n;
+}
+
+/** A model from the public Ollama library that the built-in guide does not describe: description from ollama.com, a way to pull it, its versions. */
+function LibraryDetail({ item, ov }: { item: Extract<Item, { kind: "library" }>; ov: Overview }) {
+  const e = item.entry;
+  const publisher = e.community ? e.name.split("/")[0] : null;
+  const stats = [e.pulls && `${e.pulls} pulls`, e.tags != null && `${e.tags} tags`, e.updated && `updated ${e.updated}`].filter(Boolean).join(" · ");
+  return (
+    <div className="space-y-3" data-testid="model-detail">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-mono text-base">{e.name}</h3>
+          <Chip cls={e.community ? "bg-warn/15 text-warn" : "bg-ok/15 text-ok"}>{e.community ? "community model" : "Ollama library"}</Chip>
+          {item.installed.length > 0 && <Chip cls="bg-ok/15 text-ok"><Check size={10} className="mr-0.5 inline" />installed</Chip>}
+        </div>
+        <p className="mt-1 text-sm">{e.description || <span className="text-muted">ollama.com has no description for this model.</span>}</p>
+        {stats && <p className="mt-0.5 text-[11px] text-muted">{stats}</p>}
+      </div>
+      {publisher && (
+        <div className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-[11px] text-warn" data-testid="community-warning">
+          Published by <b>{publisher}</b>, not by Ollama or Zeus-Agent, and not reviewed by either. Read its page on ollama.com before you download it.
+        </div>)}
+      <div className="flex flex-wrap gap-1">
+        {e.capabilities.map((c) => <Chip key={c} cls="bg-accent/15 text-accent">{c}</Chip>)}
+        {e.sizes.map((z) => <Chip key={z} title="Parameter size">{z}</Chip>)}
+      </div>
+      <ul className="space-y-0.5 text-xs" data-testid="capability-notes">
+        {capabilityNotes(e.capabilities).map((n) => <li key={n.text} className={n.warn ? "text-warn" : "text-muted"}>• {n.text}</li>)}
+        {e.sizes.length > 0 && <li className="text-muted">• Sizes: {e.sizes.join(", ")}. Pick one that fits your GPU memory (the table below says which do).</li>}
+      </ul>
+      <section>
+        <div className="mb-1 text-xs font-medium text-muted">Command line</div>
+        <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2">
+          <code className="min-w-0 flex-1 truncate font-mono text-xs" data-testid="pull-command">ollama pull {e.name}</code><CopyButton getText={() => `ollama pull ${e.name}`} />
+        </div>
+        <p className="mt-1 text-[11px] text-muted">Or download a version below, then press <b>Use</b> next to it to chat with it in the current project.</p>
+      </section>
+      <LiveDetails family={e.name} ov={ov} hideSummary={!!e.description} />
+      {item.installed.length > 0 && (
+        <section>
+          <div className="mb-1 text-xs font-medium text-muted">Installed on this machine <span className="font-mono text-[10px]">({item.installed.length})</span></div>
+          <div className="space-y-1.5">{item.installed.map((i) => <InstalledRow key={i.name} m={i} ov={ov} notChat={e.capabilities.includes("embedding")} />)}</div>
+        </section>)}
+      <div className="text-[11px]"><ExternalLink href={e.url}>{e.url.replace("https://", "")}</ExternalLink></div>
+    </div>
+  );
+}
+
 export function ModelDetail({ item, ov, catalog }: { item: Item; ov: Overview; catalog: Catalog }) {
+  if (item.kind === "library") return <LibraryDetail item={item} ov={ov} />;
   if (item.kind === "installed") {
     const m = item.info;
     return (

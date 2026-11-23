@@ -81,7 +81,7 @@ conversation, to command output and to streaming code blocks, and the conversati
 Modes `read_only`, `approval` (default), `trusted` and `custom`. Policy is per action: read, create, edit, delete, run command, install, git commit and git push. Delete always asks. Session grants are keyed by action and target. Blocked commands (sudo, destructive patterns, pipe to shell) are never allowed.
 
 ### 4.3 Providers and models
-A small interface (`chat_stream`, `show`, `list_models`) keeps other backends possible. Model capabilities and context length come from Ollama's `/api/show`; the catalogue adds purpose, examples and fit guidance; live details are fetched from ollama.com and cached.
+A small interface (`chat_stream`, `show`, `list_models`) keeps other backends possible. Model capabilities and context length come from Ollama's `/api/show`; the catalogue adds purpose, examples and fit guidance; the full public library list and search come from ollama.com (`providers/library.py`, cached, offline copy kept), and live details are fetched and cached.
 
 ### 4.4 Desktop UI
 React, TypeScript, Tailwind, zustand, Monaco. State in `stores/app.ts`; HTTP and WebSocket in `services/`. Scrolling behaviour is in §3.3. The webview has no native `confirm()`, so confirmations are in-app dialogs.
@@ -98,7 +98,7 @@ The Rust shell owns the window and the backend child process. `main.rs` dispatch
 ## 5. Interfaces
 
 ### 5.1 REST (selection)
-`/api/health`, `/api/settings`, `/api/about`, `/api/metrics`; `/api/ollama/*` (status, catalogue, library details, pull, unload, delete); `/api/models`; `/api/projects` and `/api/projects/{id}/*` (open, tree, file, git, changes, permissions, files); `/api/sessions` and `/api/sessions/{id}/messages`; `/api/convert`; `/api/auto/*`.
+`/api/health`, `/api/settings`, `/api/about`, `/api/metrics`; `/api/ollama/*` (status, catalogue, library list, library search, library details for a family or a community model, pull, unload, delete); `/api/models`; `/api/projects` and `/api/projects/{id}/*` (open, tree, file, git, changes, permissions, files); `/api/sessions` and `/api/sessions/{id}/messages`; `/api/convert`; `/api/auto/*`.
 
 ### 5.2 WebSocket `/ws/sessions/{id}`
 Client to server: `prompt`, `mission`, `stop`, `permission_response` (decisions `once`, `session`, `reject`).

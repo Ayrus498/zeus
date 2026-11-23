@@ -26,7 +26,7 @@ flowchart BT
 | Unit | pure logic: permissions, path rules, parsers, routers, formatters, the scroll controller, the detach decision | `backend/tests`, `frontend/src/__tests__`, Rust `mod tests` |
 | Integration | REST and WebSocket behaviour with a real SQLite database and a scripted model | `test_api.py`, `test_agent.py`, `test_mission.py` |
 | Terminal app | the real screen, driven through a pseudo-terminal and a screen emulator, with real Ollama models | `test_cli.py` and the pty method in §5 |
-| Browser | the real UI in Chromium against a real backend and model | `scripts/e2e_scroll_check.py` and the method in §6 |
+| Browser | the real UI in Chromium against a real backend and model | `scripts/e2e_scroll_check.py`, `scripts/e2e_models_library.py` and the method in §6 |
 | Launcher | the real release binary under a pseudo-terminal and a virtual display | method in §7 |
 | Model behaviour | what real local models do with the agent's prompts and tools | `scripts/e2e_demo.py`, §8 |
 | Package | what is inside the `.deb` | `dpkg-deb` checks in §9 |
@@ -35,14 +35,14 @@ flowchart BT
 
 | Suite | Command | Count |
 |---|---|---|
-| Backend (pytest) | `cd backend && .venv/bin/python -m pytest -q` | **272** in 15 files |
-| Frontend (vitest) | `cd frontend && npx vitest run` | **35** in 3 files |
+| Backend (pytest) | `cd backend && .venv/bin/python -m pytest -q` | **282** in 16 files |
+| Frontend (vitest) | `cd frontend && npx vitest run` | **48** in 3 files |
 | Shell (cargo) | `cd src-tauri && cargo test --lib` | **1** |
 | Frontend types | `cd frontend && npx tsc --noEmit` | must report nothing |
 | Frontend build | `cd frontend && npx vite build` | must succeed |
 
 Backend files: `test_convert` 38, `test_cli` 34, `test_auto_router` 28, `test_mission` 24, `test_permissions` 23, `test_rescue` 20,
-`test_models_library` 20, `test_tools` 18, `test_api` 16, `test_agent` 14, `test_zeusdir` 11, `test_modelprefs` 11, `test_model_details` 8,
+`test_models_library` 20, `test_tools` 18, `test_library` 10, `test_api` 16, `test_agent` 14, `test_zeusdir` 11, `test_modelprefs` 11, `test_model_details` 8,
 `test_about` 5, `test_runner` 2. Frontend files: `modelGroups`, `timeline`, `stickScroll`.
 
 The counts change as the code does; snapshot-style totals in tests are updated in the same change that alters the content.
@@ -76,6 +76,8 @@ Screenshots for the docs are rendered from the emulated screen to HTML and captu
 * Reproduce on the previous build: serve the previous commit's `frontend` on another port (for example with `git archive HEAD frontend`) and run the same script; it must show the defect (position climbing back to the end, no button).
 
 Result recorded on 2026-11-22 with `qwen3.5:4b`: previous build, position moved from 1185 to 1913 px by itself; new build, position stayed at 7 px for the full 5 s while the content grew from 2331 to 3312 px; the button appeared and returned to the end.
+
+**Models window and the Ollama library (FR-03a).** `scripts/e2e_models_library.py` opens Settings, Models, checks the library group, searches for a model that is only in the public library (`ornith`), opens it, checks the description, the `ollama pull` command and the version table, and presses Download with the request intercepted so nothing is pulled. It needs internet access to ollama.com.
 
 How to run it safely: start a throw-away backend (`ZEUS_HOME=… ZEUS_DATA_DIR=… .venv/bin/python -m app` from `backend/`), start `npm run dev`, add one project through `POST /api/projects`, run the script, then stop those processes by pid.
 

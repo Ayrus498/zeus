@@ -1,6 +1,11 @@
 # Zeus-Agent release notes
 
-## 0.2.1: Zeus-Agent name, detached launch and scrolling (2026-11-23)
+## 0.2.1: Zeus-Agent name, Ollama library in the Models window, detached launch and scrolling (2026-11-23)
+
+### New
+- **The Models window shows the whole Ollama library.** Models that are not in Zeus-Agent's built-in guide, for example `ornith`, are now listed under "Ollama library" (about 270 families from ollama.com, most popular first, refreshable) with their description, capabilities, parameter sizes, pull count, `ollama pull` command and a Download button for each version with its size and whether it fits your machine.
+- **Search reaches ollama.com.** Typing in the Models search box also searches the Ollama library for official and community models (community models are marked and carry a warning). Only the text you type is sent. The list works offline from the last copy.
+- Installed models are attached to their library family instead of appearing separately.
 
 ### Changed
 - **`zeus` frees the terminal.** Typing `zeus` opens the app in its own session and returns the prompt at once. Closing the terminal no longer closes the app, and its output goes to `~/.local/share/zeus/zeus.log`. `zeus --foreground` keeps it attached; launching from the application menu is unchanged.
@@ -10,7 +15,7 @@
 
 ### Download and upgrade
 `zeus_0.2.1_amd64.deb` (about 107 MiB, Ubuntu/Debian amd64)  
-SHA-256: `619989c033055aa339c5f12b99ec519e1a08eb6bf8866b4e6c198aedce8f61bb`
+SHA-256: `19ca559948b857560947681edef3df6f0df42a34658e2edd63e2905ecc9898ce`
 ```bash
 sudo apt install --reinstall ./zeus_0.2.1_amd64.deb
 ```
