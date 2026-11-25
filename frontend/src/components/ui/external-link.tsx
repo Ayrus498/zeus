@@ -4,7 +4,7 @@ import { api } from "../../services/api";
 import { useApp } from "../../stores/app";
 import { cn } from "../../lib/utils";
 
-/** Opens an Ollama documentation link in the user's default browser (the desktop webview cannot open new windows). */
+/** Opens an allow-listed link (Ollama, llama.cpp, Hugging Face, FreeLLMArena, the Zeus-Agent project) in the user's default browser (the desktop webview cannot open new windows). */
 export function ExternalLink({ href, children, className }: { href: string; children: ReactNode; className?: string }) {
   const toast = useApp((s) => s.toast);
   return (

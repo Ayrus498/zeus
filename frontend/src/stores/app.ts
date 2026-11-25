@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { api, type PermInfo, type Settings } from "../services/api";
 import { Socket } from "../services/socket";
 import type {
-  ChangeEntry, Mode, ModelInfo, ModelMeta, OllamaStatus, PermissionRequest, Policy, Project, Session, TimelineItem, Usage, Overview, Toast, Attachment, MissionState, SettingsView,
+  ChangeEntry, ContextInfo, EngineId, EnginesInfo, Mode, ModelInfo, ModelMeta, OllamaStatus, PermissionRequest, Policy, Project, Session, TimelineItem, Usage, Overview, Toast, Attachment, MissionState, SettingsView,
 } from "../services/types";
 
 export type RightTab = "files" | "changes" | "terminal" | "usage";
@@ -12,6 +12,8 @@ interface State {
   backendUp: boolean; error: string | null;
   ollama: OllamaStatus | null; settings: Settings | null;
   models: ModelInfo[]; modelMeta: ModelMeta | null;
+  engines: EnginesInfo | null; engineHelpOpen: boolean; llamaOpen: boolean;
+  memoryOpen: boolean; resetOpen: boolean; pendingModel: { engine: EngineId; name: string } | null; ctxInfo: ContextInfo | null; modelsTarget: string | null;
   projects: Project[]; project: Project | null; sessions: Session[]; session: Session | null; allSessions: Record<number, Session[]>;
   perms: PermInfo | null;
   timeline: TimelineItem[]; running: boolean; modelState: "idle" | "loading" | "ready"; activeModel: string | null;
@@ -23,6 +25,8 @@ interface State {
   dismissDownload(id: number): Promise<void>; unloadModel(name: string): Promise<void>; deleteModel(name: string): Promise<boolean>;
   toast(text: string, level?: Toast["level"]): void; dismissToast(id: number): void;
   init(): Promise<void>; refreshOllama(): Promise<void>; refreshModels(): Promise<void>;
+  setMemoryOpen(o: boolean): void; setResetOpen(o: boolean): void; refreshContext(): Promise<ContextInfo | null>; addLocal(item: Extract<TimelineItem, { kind: "local" }>): void; clearTimeline(): void; openModels(target?: string | null): void;
+  refreshEngines(): Promise<void>; setEngine(e: EngineId): Promise<void>; engine(): EngineId; setEngineHelpOpen(o: boolean): void; setLlamaOpen(o: boolean): void;
   selectProject(id: number): Promise<void>; addProjectFromPicker(): Promise<void>; addProjectPath(p: string): Promise<void>;
   createProject(parent: string, name: string): Promise<void>; removeProject(id: number): Promise<void>;
   newSession(): Promise<void>; selectSession(id: number): Promise<void>; renameSession(id: number, t: string): Promise<void>; deleteSession(id: number): Promise<void>;
@@ -136,13 +140,17 @@ export const useApp = create<State>((set, get) => {
       case "usage":
         set((s) => ({ session: s.session ? { ...s.session, input_tokens: ev.session_input, output_tokens: ev.session_output } : s.session, usage: { prompt_tokens: ev.prompt_tokens, output_tokens: ev.output_tokens, tokens_per_sec: ev.tokens_per_sec,
           session_input: ev.session_input, session_output: ev.session_output, context_used: ev.context_used } })); break;
+      case "compaction":
+        set((st) => ({ timeline: [...st.timeline, { kind: "local", title: "Conversation summarised", tone: "ok", body: `The older ${ev.covers} messages were folded into a summary so the conversation keeps fitting the context window (about ${ev.tokens_before.toLocaleString()} → ${ev.tokens_after.toLocaleString()} tokens). The full transcript is kept.\n\n${ev.summary}`, actions: [{ label: "Show context", cmd: "/context" }] }] }));
+        void get().refreshContext(); break;
+      case "memory_saved": get().notify(`${ev.added ? "Saved to" : "Already in"} project memory: ${ev.note}`); break;
       case "error": get().notify(ev.message, "error"); break;
       case "notice": get().notify(ev.text, ev.level === "error" ? "error" : "info"); break;
       case "run_end":
         set((s) => ({ running: false, modelState: "idle", pending: [], timeline: s.timeline.map((i) => (i.kind === "assistant" && i.streaming ? { ...i, streaming: false } : i)) }));
         if (ev.status === "stopped") get().notify("Generation stopped.");
         if (ev.status === "step_limit") get().notify("Stopped after reaching the step limit.", "error");
-        void get().refreshChanges(); get().bump();
+        void get().refreshChanges(); get().bump(); void get().refreshContext();
         void api.sessions(get().project?.id).then((sessions) => set({ sessions, session: sessions.find((x) => x.id === get().session?.id) ?? get().session }));
         break;
     }
@@ -168,11 +176,15 @@ export const useApp = create<State>((set, get) => {
       } catch { /* mission details are optional on reload */ }
     }
     sock = new Socket(`/ws/sessions/${sess.id}`, handle);
-    if (sess.model && sess.model !== "auto") void api.modelInfo(sess.model, sess.num_ctx ?? undefined).then((m) => set({ modelMeta: m })).catch(() => set({ modelMeta: null }));
+    void api.openSession(sess.id).catch(() => undefined);                       // remember it as the conversation you were last in (state.json)
+    void get().refreshModels();                                                 // the model list belongs to the conversation's engine
+    void get().refreshContext();
+    if (sess.model && sess.model !== "auto") void api.modelInfo(sess.model, sess.num_ctx ?? undefined, get().engine()).then((m) => set({ modelMeta: m })).catch(() => set({ modelMeta: null }));
+    else set({ modelMeta: null });
   }
 
   return {
-    backendUp: false, error: null, ollama: null, settings: null, models: [], modelMeta: null,
+    backendUp: false, error: null, ollama: null, settings: null, models: [], modelMeta: null, engines: null, engineHelpOpen: false, llamaOpen: false, memoryOpen: false, resetOpen: false, pendingModel: null, ctxInfo: null, modelsTarget: null,
     projects: [], project: null, sessions: [], session: null, allSessions: {}, perms: null,
     timeline: [], running: false, modelState: "idle", activeModel: null, pending: [], usage: null,
     changes: [], treeVersion: 0, openFile: null, rightTab: "files", settingsOpen: false, settingsView: "endpoint", modelsOpen: false,
@@ -238,14 +250,43 @@ export const useApp = create<State>((set, get) => {
         await api.health(); set({ backendUp: true });
       } catch { started = false; set({ backendUp: false }); setTimeout(() => void get().init(), 1500); return; }
       const settings = await api.settings(); set({ settings });
-      await Promise.all([get().refreshOllama(), get().refreshModels()]);
+      await Promise.all([get().refreshOllama(), get().refreshEngines(), get().refreshModels()]);
       const projects = await api.projects(); set({ projects });
       const first = projects.find((p) => p.exists !== false);
       if (first) await get().selectProject(first.id);
       setInterval(() => void get().refreshOllama(), 10000);
+      setInterval(() => void get().refreshEngines(), 20000);
     },
     async refreshOllama() { try { set({ ollama: await api.ollama() }); } catch { set({ ollama: { connected: false, endpoint: get().settings?.ollama_url ?? "", error: "backend unreachable" } }); } },
-    async refreshModels() { try { set({ models: await api.models() }); } catch { set({ models: [] }); } },
+    async refreshModels() { try { set({ models: await api.models(get().engine()) }); } catch { set({ models: [] }); } },
+    setResetOpen: (resetOpen) => set(resetOpen ? { resetOpen, settingsOpen: false } : { resetOpen }),
+    setMemoryOpen: (memoryOpen) => set(memoryOpen ? { memoryOpen, settingsOpen: false } : { memoryOpen }),
+    async refreshContext() {
+      const sid = get().session?.id; if (!sid) { set({ ctxInfo: null }); return null; }
+      try { const c = await api.context(sid); if (get().session?.id === sid) set({ ctxInfo: c }); return c; } catch { return null; }
+    },
+    addLocal: (item) => set((s) => ({ timeline: [...s.timeline, item] })),
+    clearTimeline: () => set({ timeline: [] }),
+    openModels: (modelsTarget = null) => set({ modelsOpen: true, modelsTarget, settingsOpen: false }),
+    async refreshEngines() { try { set({ engines: await api.engines() }); } catch { /* the engines panel keeps its last state */ } },
+    engine: () => (get().session?.engine ?? get().settings?.engine ?? get().engines?.default ?? "ollama") as EngineId,
+    setEngineHelpOpen: (engineHelpOpen) => set({ engineHelpOpen }),
+    setLlamaOpen: (llamaOpen) => set(llamaOpen ? { llamaOpen, engineHelpOpen: false, settingsOpen: false } : { llamaOpen }),
+    /** Switch the engine for the current conversation (and for new ones). The model resets to the one last used with that engine. */
+    async setEngine(name) {
+      const sess = get().session;
+      try {
+        const info = await api.setEngine(name, sess?.id ?? null);
+        set((st) => ({ engines: info, settings: st.settings ? { ...st.settings, engine: name } : st.settings }));
+        if (sess && get().project) {
+          const sessions = await api.sessions(get().project!.id);
+          set({ sessions, session: sessions.find((x) => x.id === sess.id) ?? get().session, modelMeta: null });
+        }
+        await get().refreshModels();
+        const m = get().session?.model;
+        if (m && m !== "auto") try { set({ modelMeta: await api.modelInfo(m, get().session?.num_ctx ?? undefined, name) }); } catch { set({ modelMeta: null }); }
+      } catch (e) { get().notify(`Could not switch engine: ${e instanceof Error ? e.message : e}`, "error"); }
+    },
 
     async selectProject(id) {
       const project = await api.openProject(id);
@@ -270,11 +311,17 @@ export const useApp = create<State>((set, get) => {
     },
 
     async newSession() {
-      const p = get().project; if (!p) return;
+      const p = get().project;
+      if (!p) { get().notify("Open or create a project first: a conversation belongs to a project.", "error"); return; }
       const s = get().settings;
       const prev = get().session;
-      const sess = await api.createSession({ project_id: p.id, model: prev?.model ?? s?.default_model, num_ctx: prev?.num_ctx ?? s?.default_num_ctx });
-      set({ sessions: [sess, ...get().sessions] }); await loadSession(sess);
+      const eng = get().engine();
+      const sameEngine = !prev || (prev.engine ?? "ollama") === eng;
+      const pend = get().pendingModel;
+      const chosen = pend && pend.engine === eng ? pend.name : undefined;           // a model picked before any project was open
+      const model = sameEngine ? (prev?.model ?? chosen ?? (eng === "ollama" ? s?.default_model : undefined)) : chosen;
+      const sess = await api.createSession({ project_id: p.id, engine: eng, model, num_ctx: prev?.num_ctx ?? s?.default_num_ctx });
+      set({ sessions: [sess, ...get().sessions], pendingModel: null }); await loadSession(sess);
     },
     async selectSession(id) { const s = get().sessions.find((x) => x.id === id); if (s) await loadSession(s); },
     async renameSession(id, title) { const s = await api.patchSession(id, { title }); set((st) => ({ sessions: st.sessions.map((x) => (x.id === id ? s : x)), session: st.session?.id === id ? s : st.session })); },
@@ -286,20 +333,25 @@ export const useApp = create<State>((set, get) => {
 
     async setModel(name) {
       let sess = get().session;
+      if (!sess && !get().project) {                                    // nothing to attach a model to yet (a fresh install, or after a reset): remember the choice and say so
+        set({ pendingModel: { engine: get().engine(), name } });
+        get().notify(`${name === "auto" ? "Auto mode" : name} will be used for your first conversation. Open or create a project to begin.`);
+        return;
+      }
       if (!sess) { await get().newSession(); sess = get().session; }
       if (!sess) return;
       const s = await api.patchSession(sess.id, { model: name });
-      await api.saveSettings({ default_model: name });
+      if (get().engine() === "ollama") await api.saveSettings({ default_model: name });          // (llama.cpp remembers its last model per engine on the backend)
       set((st) => ({ session: s, sessions: st.sessions.map((x) => (x.id === s.id ? s : x)) }));
       if (name === "auto") { set({ modelMeta: null }); return; }        // Auto resolves a real model per prompt
-      try { set({ modelMeta: await api.modelInfo(name, s.num_ctx ?? undefined) }); } catch (e) { set({ modelMeta: null }); get().notify(String(e instanceof Error ? e.message : e), "error"); }
+      try { set({ modelMeta: await api.modelInfo(name, s.num_ctx ?? undefined, get().engine()) }); } catch (e) { set({ modelMeta: null }); get().notify(String(e instanceof Error ? e.message : e), "error"); }
     },
     async setCtx(n) {
       const sess = get().session; if (!sess) return;
       const s = await api.patchSession(sess.id, { num_ctx: n });
       await api.saveSettings({ default_num_ctx: n });
       set((st) => ({ session: s, sessions: st.sessions.map((x) => (x.id === s.id ? s : x)) }));
-      if (s.model && s.model !== "auto") try { set({ modelMeta: await api.modelInfo(s.model, n) }); } catch { /* keep old */ }
+      if (s.model && s.model !== "auto") try { set({ modelMeta: await api.modelInfo(s.model, n, get().engine()) }); } catch { /* keep old */ }
     },
 
     sendPrompt(text) {

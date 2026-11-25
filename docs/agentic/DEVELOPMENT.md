@@ -39,7 +39,7 @@ Isolate your runs: set `ZEUS_HOME` and `ZEUS_DATA_DIR` to throw-away folders so 
 | Backend tests | `cd backend && .venv/bin/python -m pytest -q` |
 | Frontend type check, tests, build | `cd frontend && npx tsc --noEmit && npx vitest run && npx vite build` |
 | Shell unit test and build | `cd src-tauri && cargo test --lib && cargo build --release` |
-| Build the `.deb` | `packaging/build-deb.sh` (runs the backend tests, builds the UI, runs `tauri build`) |
+| Build the `.deb` | `packaging/build-deb.sh` builds the version stored in `VERSION` (backend tests, end-to-end tests, UI, `tauri build`); `--tag mainrelease` or `--tag subrelease` bumps it first (see README, Build the .deb) |
 
 ## 4. Conventions
 
@@ -50,7 +50,7 @@ Isolate your runs: set `ZEUS_HOME` and `ZEUS_DATA_DIR` to throw-away folders so 
 * Keep names and messages in the product voice: the product is **Zeus-Agent**; the command is `zeus`; paths and variables keep the lower-case or `ZEUS_` forms.
 
 **Backend**
-* `api/main.py` wires only; logic lives in the owning package. Mutating tools always call `PermissionManager.authorize` first.
+* `api/main.py` only composes; each feature's routes are in `api/routes/<feature>.py` and its logic in the owning package (layering: [STRUCTURE.md](../STRUCTURE.md)). Mutating tools always call `PermissionManager.authorize` first.
 * Anything that touches paths goes through the workspace resolver. Anything that comes from a model, a file under `.zeus/` or the network is untrusted input.
 * Prompts are behaviour: change them only with a failing real-model case or a clear defect, and record the before and after.
 
@@ -92,8 +92,8 @@ Isolate your runs: set `ZEUS_HOME` and `ZEUS_DATA_DIR` to throw-away folders so 
 
 | To add… | Do this |
 |---|---|
-| a tool | schema and implementation in `tools/engine.py` (validate arguments, call `authorize`), a test in `test_tools.py`, a line in the system prompt only if the model needs guidance, a row in the permission table if it is a new action |
-| a REST endpoint | handler in `api/main.py` delegating to a package; a test in `test_api.py`; update [DESIGN.md §5](DESIGN.md#5-interfaces) |
+| a tool | schema and implementation in `toolchain/engine.py` (validate arguments, call `authorize`), a test in `test_tools.py`, a line in the system prompt only if the model needs guidance, a row in the permission table if it is a new action |
+| a REST endpoint | handler in `api/routes/<feature>.py` delegating to a package; a test in `tests/api/`; update [DESIGN.md §5](DESIGN.md#5-interfaces) |
 | a WebSocket event | agree it in a design note; emit in `SessionRuntime`; handle it in the UI (`stores/app.ts`) and the terminal app (`cli/render.py`); document it in DESIGN §5.2 |
 | a terminal slash command | entry in `COMMANDS` in `cli/app.py`, a `cmd_<name>` method, a test in `test_cli.py`, a row in `docs/COMMANDS.md` and the README |
 | a UI feature | a folder under `frontend/src/features/`, state in the store, a unit test for any logic |
@@ -103,7 +103,7 @@ Isolate your runs: set `ZEUS_HOME` and `ZEUS_DATA_DIR` to throw-away folders so 
 
 Owner: **A10**, with the owner's approval for every outward step.
 
-1. Choose the version. Update it in one change: `backend/app/config.py` (`VERSION`), `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, the `zeus` entry in `src-tauri/Cargo.lock`, `frontend/package.json` and the top of `frontend/package-lock.json`.
+1. Choose the version. Update it in one change: `backend/app/core/config.py` (`VERSION`), `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, the `zeus` entry in `src-tauri/Cargo.lock`, `frontend/package.json` and the top of `frontend/package-lock.json`.
 2. Write the release notes (`RELEASE_NOTES.md`): what is new, improved, fixed, how to upgrade, known limits.
 3. Run every gate (G3 to G5) on the exact tree that will be released.
 4. Build the package with `packaging/build-deb.sh`. The script copies every `.deb` it finds in the Tauri bundle folder, so delete older versions from `src-tauri/target/release/bundle/deb/` first.

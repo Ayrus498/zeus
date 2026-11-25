@@ -62,7 +62,7 @@ def stop_backend(proc: subprocess.Popen | None) -> None:
 class Api:
     def __init__(self, port: int = DEFAULT_PORT):
         self.port = port
-        self.http = httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}", timeout=httpx.Timeout(60.0, connect=5.0))
+        self.http = httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}", timeout=httpx.Timeout(60.0, connect=5.0), headers={"X-Zeus-Client": "cli"})
 
     async def close(self):
         await self.http.aclose()
@@ -88,7 +88,7 @@ class Api:
     async def events(self, sid: int, outgoing: dict) -> AsyncIterator[dict]:
         """Connect to the session socket, send `outgoing`, and yield events until the run ends. `.stop()` via the returned socket."""
         import websockets
-        async with websockets.connect(f"ws://127.0.0.1:{self.port}/ws/sessions/{sid}", max_size=32 * 2**20, ping_interval=20) as ws:
+        async with websockets.connect(f"ws://127.0.0.1:{self.port}/ws/sessions/{sid}?client=cli", max_size=32 * 2**20, ping_interval=20) as ws:
             self.ws = ws
             await ws.send(json.dumps(outgoing))
             async for raw in ws:

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as D from "@radix-ui/react-dialog";
-import { ChevronDown, ChevronRight, Boxes, ChevronsDownUp, ChevronsUpDown, Loader2, RefreshCw, Search, X } from "lucide-react";
+import { Award, ChevronDown, ChevronRight, Boxes, ChevronsDownUp, ChevronsUpDown, Loader2, RefreshCw, Search, X } from "lucide-react";
 import { api } from "../../services/api";
 import { useApp } from "../../stores/app";
 import { cn } from "../../lib/utils";
 import { buildItems, groupItems, type Item } from "../../lib/modelGroups";
 import type { Catalog, LibraryList, LibrarySearch } from "../../services/types";
+import { ArenaPanel } from "../benchmarks/ArenaPanel";
 import { AutoModeCard } from "./AutoModeCard";
 import { ModelDetail } from "./ModelDetail";
 import { ACTIVE, Chip, Downloads, FIT, Installed } from "./ModelParts";
@@ -13,6 +14,7 @@ import { SetupGuide } from "./SetupGuide";
 
 const STORE_KEY = "zeus.models.collapsed";
 const OVERVIEW = "overview";
+const ARENA = "arena";
 
 /** Families start expanded, except the long Ollama library list, until the user chooses otherwise. */
 function loadCollapsed(): Set<string> {
@@ -43,7 +45,7 @@ function Row({ item, selected, onSelect, downloading }: { item: Item; selected: 
 
 /** Models window: search top-left, collapsible families on the left, details on the right. Opened from Settings. */
 export function ModelsWindow() {
-  const { modelsOpen, setModelsOpen, overview: ov, refreshOverview } = useApp();
+  const { modelsOpen, setModelsOpen, overview: ov, refreshOverview, modelsTarget } = useApp();
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [catErr, setCatErr] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -56,6 +58,7 @@ export function ModelsWindow() {
   const [remoteBusy, setRemoteBusy] = useState(false);
   const [pinned, setPinned] = useState<Item | null>(null);
   const search = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (modelsOpen && modelsTarget) { setSel(modelsTarget); useApp.setState({ modelsTarget: null }); } }, [modelsOpen, modelsTarget]);   // /best opens straight at the benchmarks
 
   useEffect(() => {
     if (!modelsOpen) return;
@@ -135,6 +138,10 @@ export function ModelsWindow() {
                   <Boxes size={13} className="text-accent" />Overview · Auto mode
                   {activeCount > 0 && <span className="ml-auto rounded bg-accent px-1.5 text-[10px] text-accent-foreground" title="Downloads in progress">{activeCount}</span>}
                 </button>
+                <button type="button" onClick={() => setSel(ARENA)} aria-current={sel === ARENA ? "true" : undefined} data-testid="row-arena"
+                  className={cn("mb-1 flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-accent", sel === ARENA ? "bg-accent/20 text-foreground" : "text-muted hover:bg-surface-2 hover:text-foreground")}>
+                  <Award size={13} className="text-accent" />Best for your hardware · benchmarks
+                </button>
                 {groups.map((g) => {
                   const open = isOpen(g.id);
                   const inst = g.items.filter((i) => i.installed.length > 0).length;
@@ -169,7 +176,7 @@ export function ModelsWindow() {
             </nav>
             {/* ------------------------------------------------ right: details */}
             <main className="min-w-0 flex-1 overflow-auto p-5">
-              {!ov ? <div className="text-xs text-muted">Reading Ollama state…</div> : (
+              {sel === ARENA ? <ArenaPanel /> : !ov ? <div className="text-xs text-muted">Reading Ollama state…</div> : (
                 <div className="space-y-4">
                   <Downloads rows={ov.downloads} />
                   {sel === OVERVIEW || !selected || !catalog ? (

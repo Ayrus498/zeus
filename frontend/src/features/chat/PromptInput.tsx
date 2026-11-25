@@ -5,6 +5,9 @@ import { Select } from "../../components/ui/select";
 import { useApp } from "../../stores/app";
 import { cn } from "../../lib/utils";
 import { api } from "../../services/api";
+import { ContextChip } from "../memory/ContextChip";
+import { SlashMenu } from "../commands/SlashMenu";
+import { findCommand, matchCommands, runSlash } from "../commands/commands";
 
 const MAX_DOC = 200_000;                      // Markdown attached directly
 const MAX_UPLOAD = 25 * 1024 * 1024;          // documents converted by MarkItDown
@@ -21,9 +24,21 @@ export function PromptInput() {
   const [exts, setExts] = useState<string[]>(FALLBACK_EXT);
   const [converting, setConverting] = useState<string | null>(null);
   useEffect(() => { api.convertFormats().then((f) => setExts(f.formats.map((x) => x.ext))).catch(() => { /* keep fallback */ }); }, []);
-  const { running, sendPrompt, sendMission, stop, session, project, ollama, attachment, setAttachment, toast } = useApp();
+  const { running, sendPrompt, sendMission, stop, session, project, ollama, attachment, setAttachment, toast, engines, engine } = useApp();
   const noModel = !session?.model;
-  const disabled = !project || noModel || !ollama?.connected;
+  const eng = engine();
+  const engInfo = engines?.engines.find((e) => e.id === eng);
+  const engineOk = engInfo ? engInfo.available : !!ollama?.connected;             // the engine of this conversation, not always Ollama
+  const engineName = eng === "llamacpp" ? "llama.cpp" : "Ollama";
+  const disabled = !project || noModel || !engineOk;
+  const [slashIdx, setSlashIdx] = useState(0);
+  const [slashOff, setSlashOff] = useState(false);
+  const typedCmd = text.startsWith("/") && !text.includes("\n") && !attachment;
+  const hasArg = /^\/\S*\s/.test(text);
+  const matches = typedCmd && !hasArg ? matchCommands(text) : [];
+  const menuOpen = matches.length > 0 && !slashOff;
+  const argHint = typedCmd && hasArg ? findCommand(text.slice(1).split(/\s+/)[0]) : undefined;
+  useEffect(() => { setSlashIdx(0); setSlashOff(false); }, [text]);
   const isAuto = session?.model === "auto";
 
   const attach = async (f: File | undefined | null) => {
@@ -53,8 +68,18 @@ export function PromptInput() {
       toast(/^Could not convert/.test(msg) ? msg : `Could not convert "${f.name}": ${msg}`, "error");
     } finally { setConverting(null); }
   };
+  const pickCommand = (c: { name: string; required?: boolean; insert?: string }) => {
+    if (c.required || c.insert) { setText(`/${c.name} `); return; }                 // waits for its argument, or goes to the model as typed
+    setText(""); void runSlash(`/${c.name}`);
+  };
   const submit = () => {
-    if (running || disabled) return;
+    const typed = text.trim();
+    if (typed.startsWith("/") && !attachment) {                               // a command runs even without a model or while Zeus-Agent works
+      void runSlash(typed).then((handled) => { if (handled) setText(""); else if (!running && !disabled) { sendPrompt(typed); setText(""); } });
+      return;
+    }
+    if (running) return;
+    if (disabled) { toast(!project ? "Open a project first." : noModel ? "Select a model first (or type / for commands)." : `${engineName} is not available. Type /engine for help.`, "error"); return; }
     if (attachment) { sendMission({ note: text.trim(), rounds: Number(rounds), verifier }); setText(""); return; }
     const t = text.trim();
     if (!t) return;
@@ -90,20 +115,34 @@ export function PromptInput() {
               <span className="ml-auto">Zeus-Agent works in rounds and reviews against the criteria until they are all met.</span>
             </div>
           </div>)}
+        <div className="relative">
+          {menuOpen && <SlashMenu items={matches} index={slashIdx} onPick={pickCommand} onHover={setSlashIdx} />}
+          {argHint && !menuOpen && <div className="absolute bottom-full left-0 mb-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] text-muted shadow" data-testid="slash-hint"><code className="text-accent">/{argHint.name}{argHint.args ? " " + argHint.args : ""}</code> {argHint.desc}</div>}
         <textarea
           value={text} onChange={(e) => setText(e.target.value)} rows={attachment ? 2 : 3} aria-label="Prompt"
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
-          placeholder={!project ? "Open a project to begin" : noModel ? "Select a model to begin" : !ollama?.connected ? "Ollama is not connected"
+          onKeyDown={(e) => {
+            if (menuOpen) {
+              if (e.key === "ArrowDown") { e.preventDefault(); setSlashIdx((i) => (i + 1) % matches.length); return; }
+              if (e.key === "ArrowUp") { e.preventDefault(); setSlashIdx((i) => (i - 1 + matches.length) % matches.length); return; }
+              if (e.key === "Tab") { e.preventDefault(); setText(`/${matches[slashIdx].name} `); return; }
+              if (e.key === "Escape") { e.preventDefault(); setSlashOff(true); return; }
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); pickCommand(matches[slashIdx]); return; }
+            }
+            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+          }}
+          placeholder={!project ? "Open a project to begin" : noModel ? "Select a model to begin  (type / for commands)" : !engineOk ? `${engineName} is not available  (type / for commands)`
             : attachment ? "Optional: add instructions for this document…  (Enter to start the mission)"
-            : `Ask Zeus-Agent to build, modify or explain code…  (Enter to send, Shift+Enter for newline${isAuto ? "; /think or /code forces a model" : ""}; attach a .md, PDF, Word… file to run it as a mission)`}
-          disabled={disabled && !running}
+            : `Ask Zeus-Agent to build, modify or explain code…  (Enter to send, Shift+Enter for newline, / for commands${isAuto ? "; /think or /code forces a model" : ""}; attach a .md, PDF, Word… file to run it as a mission)`}
+          disabled={!project && !running}
           className="w-full resize-none bg-transparent px-2 py-1 outline-none placeholder:text-muted" />
+        </div>
         <div className="flex items-center justify-between">
-          <div>
+          <div className="flex items-center gap-1">
             <input ref={file} type="file" accept={exts.map((e) => "." + e).join(",")} className="hidden" aria-label="Attach Markdown file" data-testid="attach-input"
               onChange={async (e) => { const input = e.target; await attach(input.files?.[0]); input.value = ""; }} />
             <button type="button" aria-label="Attach a Markdown file" title={`Attach a document (.md, PDF, Word, PowerPoint, Excel, HTML, CSV…): Zeus-Agent converts it to Markdown, reads it as the task and works on it until it is verified`} disabled={disabled || running || !!converting}
               onClick={() => file.current?.click()} className="grid h-8 w-8 cursor-pointer place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"><Paperclip size={16} /></button>
+            <ContextChip />
           </div>
           {running
             ? <Button variant="danger" size="sm" onClick={stop}><Square size={12} fill="currentColor" /> Stop</Button>

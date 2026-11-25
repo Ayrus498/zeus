@@ -1,6 +1,64 @@
 #!/bin/sh
+# Before Zeus-Agent is removed: stop it, and remove what it keeps in every user's home folder (settings, history, logs, window data).
+#   apt remove zeus  -> all of that except the models Zeus-Agent downloaded (kept, and reported)
+#   apt purge zeus   -> also the downloaded models (see postrm)
+# Upgrades and reinstalls (prerm upgrade) leave everything alone. A user can keep their data by creating ~/.zeus/keep-data.
 set -e
 RES="${ZEUS_RES_DIR:-/usr/lib/zeus}"
+BIN="${ZEUS_BIN:-/usr/bin/zeus}"
+
+# the desktop app and the backend (also `zeus --cli`), exactly: their command line must START with the installed program
+zeus_pids() { pgrep -f "^($RES/venv/bin/python -m app|$BIN)( |\$)" 2>/dev/null || true; }
+
+stop_zeus() {
+    pids="$(zeus_pids)"
+    [ -n "$pids" ] || return 0
+    kids=""
+    for p in $pids; do                                  # the llama-server that the backend started for a model
+        for k in $(pgrep -P "$p" 2>/dev/null || true); do
+            [ "$(cat "/proc/$k/comm" 2>/dev/null)" = "llama-server" ] && kids="$kids $k"
+        done
+    done
+    # shellcheck disable=SC2086
+    kill -TERM $pids $kids 2>/dev/null || true
+    i=0
+    while [ "$i" -lt 20 ]; do                           # up to 5 seconds to leave cleanly
+        left=""
+        for p in $pids $kids; do kill -0 "$p" 2>/dev/null && left="$left $p"; done
+        [ -z "$left" ] && return 0
+        sleep 0.25
+        i=$((i + 1))
+    done
+    # shellcheck disable=SC2086
+    kill -KILL $left 2>/dev/null || true
+}
+
+# every real user (and root) who has Zeus-Agent data: the cleanup runs AS THAT USER, with a clean environment, never as root
+clean_users() {
+    PY="$RES/venv/bin/python"
+    [ -x "$PY" ] || PY="$(command -v python3 || true)"
+    if [ -z "$PY" ] || ! command -v runuser >/dev/null 2>&1; then
+        echo "zeus: could not clean the Zeus-Agent data in home folders (python3 or runuser missing); remove ~/.zeus and ~/.local/share/zeus by hand." >&2
+        return 0
+    fi
+    getent passwd | while IFS=: read -r name _ uid _ _ home _; do
+        case "$uid" in ''|*[!0-9]*) continue ;; esac
+        if [ "$uid" -ne 0 ] && { [ "$uid" -lt 1000 ] || [ "$uid" -ge 65534 ]; }; then continue; fi
+        [ -d "$home" ] || continue
+        [ -e "$home/.zeus" ] || [ -e "$home/.local/share/zeus" ] || [ -e "$home/.local/share/ai.zeus.desktop" ] \
+            || [ -e "$home/.cache/ai.zeus.desktop" ] || [ -e "$home/.config/ai.zeus.desktop" ] || continue
+        runuser -u "$name" -- env -i HOME="$home" PATH=/usr/sbin:/usr/bin:/sbin:/bin PYTHONPATH="$RES/backend" PYTHONDONTWRITEBYTECODE=1 \
+            "$PY" -m app.maintenance.cleanup </dev/null || echo "zeus: could not clean the Zeus-Agent data in $home" >&2
+    done
+}
+
+case "$1" in
+    remove)                                              # (purge runs this too, and then postrm)
+        stop_zeus
+        clean_users
+        ;;
+esac
+
 rm -rf "$RES/venv"
 find "$RES/backend" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
 exit 0

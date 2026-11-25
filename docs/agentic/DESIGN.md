@@ -24,16 +24,17 @@ decision; a front end only renders requests and sends the user's answer.
 
 | Component | Path | Responsibility | Owner agent |
 |---|---|---|---|
-| API | `backend/app/api` | REST and two WebSocket endpoints; wiring only | A3 |
-| Agent | `backend/app/agent` | agent loop (`AgentEngine`), prompts, tool-call parsing, rescue of printed files, missions, per-model preferences, auto routing | A3 |
-| Tools | `backend/app/tools` | tool schemas, argument validation, implementations; mutating tools call the permission engine first | A3 |
-| Permissions | `backend/app/permissions` | modes, per-action policy, session grants, command classification | A3, A8 |
-| Providers | `backend/app/providers` | Ollama client, model catalogue, live library details, downloads | A3 |
-| Terminal runner | `backend/app/terminal` | controlled subprocess execution with streaming, timeout and cancellation | A3 |
-| Projects and sessions | `backend/app/projects`, `sessions` | project registry, conversations, live `SessionRuntime` event bus | A3 |
-| Persistence | `backend/app/database`, `persistence` | SQLite schema, `.zeus/` mirror and restore | A3 |
-| Conversion | `backend/app/convert` | sandboxed document-to-Markdown conversion | A3 |
-| About and metrics | `backend/app/about.py`, `metrics.py` | device information, GPU/CPU/RAM usage | A3 |
+| API | `backend/app/api` | REST and two WebSocket endpoints; `main.py` composes, `routes/` has one router per feature | A3 |
+| Agents | `backend/app/agents` | agent loop (`AgentEngine`), prompts, rescue of printed files, missions, per-model preferences, auto routing | A3 |
+| Toolchain | `backend/app/toolchain` | tool schemas, argument validation, implementations; the permission engine (modes, per-action policy, session grants, command classification); the subprocess runner; text tool-call parsing. Mutating tools call the permission engine first | A3, A8 |
+| Model connectors | `backend/app/modelconnectors` | the engines behind one contract (`base.py`): Ollama client and catalogue, llama.cpp (llama-server, GGUF, Ollama's store read-only), registry, downloads | A3 |
+| Model hub | `backend/app/modelhub` | Arena benchmark data, what fits this machine | A3 |
+| Memory | `backend/app/memory` | project memory notes, rolling summary | A3 |
+| Workspace | `backend/app/workspace` | project registry, conversations, live `SessionRuntime` event bus, `.zeus/` mirror and restore, `state.json` | A3 |
+| Documents | `backend/app/documents` | sandboxed document-to-Markdown conversion | A3 |
+| Maintenance | `backend/app/maintenance` | reset to a fresh installation, uninstall cleanup | A3, A8 |
+| System and core | `backend/app/system`, `core` | device information, metrics, hardware fit; configuration, SQLite schema | A3 |
+| MCP (planned) | `backend/app/mcp` | MCP servers and their tools; permissions apply to every call | A3 |
 | Terminal app | `backend/app/cli` | full-screen client: layout, commands, cards, shell runner | A5 |
 | Desktop UI | `frontend/src` | features: chat, projects, models, permissions, terminal, file explorer | A4 |
 | Shell | `src-tauri` | window, backend lifecycle, `zeus` launcher dispatch and detaching | A6 |
@@ -81,7 +82,7 @@ conversation, to command output and to streaming code blocks, and the conversati
 Modes `read_only`, `approval` (default), `trusted` and `custom`. Policy is per action: read, create, edit, delete, run command, install, git commit and git push. Delete always asks. Session grants are keyed by action and target. Blocked commands (sudo, destructive patterns, pipe to shell) are never allowed.
 
 ### 4.3 Providers and models
-A small interface (`chat_stream`, `show`, `list_models`) keeps other backends possible. Model capabilities and context length come from Ollama's `/api/show`; the catalogue adds purpose, examples and fit guidance; the full public library list and search come from ollama.com (`providers/library.py`, cached, offline copy kept), and live details are fetched and cached.
+The connector contract in `modelconnectors/base.py` (`status`, `list_models`, `show`, `chat_stream`, `chat_once`, `running`, `unload`, `delete`, `pull_stream`, errors derived from `ConnectorError`) keeps other engines possible: Ollama and llama.cpp both keep it, and `tests/modelconnectors/test_connector_contract.py` checks it. Model capabilities and context length come from Ollama's `/api/show`; the catalogue adds purpose, examples and fit guidance; the full public library list and search come from ollama.com (`providers/library.py`, cached, offline copy kept), and live details are fetched and cached.
 
 ### 4.4 Desktop UI
 React, TypeScript, Tailwind, zustand, Monaco. State in `stores/app.ts`; HTTP and WebSocket in `services/`. Scrolling behaviour is in §3.3. The webview has no native `confirm()`, so confirmations are in-app dialogs.
@@ -120,10 +121,10 @@ A second socket, `/ws/terminal/{pid}`, streams a user-typed terminal command.
 | Local only | the backend binds to `127.0.0.1`; the desktop CSP allows only local connections | review |
 | Detached launch | the copy gets no terminal and inherits no stdin; it adds no new network surface | launcher checks |
 
-**A8 review triggers:** any change under `permissions/`, `tools/`, `api/`, `persistence/`, `convert/`, any new outbound network call, and any change to what the detached launcher passes to the child.
+**A8 review triggers:** any change under `toolchain/`, `api/`, `workspace/`, `maintenance/`, `documents/`, any new outbound network call, and any change to what the detached launcher passes to the child.
 
 ## 7. Packaging and release design
-`packaging/build-deb.sh` runs the backend tests, builds the UI, builds with Tauri and copies the `.deb` to `dist/`. The package bundles Python wheels so installing needs no network, installs `/usr/bin/zeus` and `/usr/bin/zeus-cli` (and `zeus-code` as an alias), and a desktop entry whose display name is Zeus-Agent while the command stays `zeus`. The post-install script creates the virtual environment under `/usr/lib/zeus/venv`. Versions are kept in sync across the backend config, the Tauri config, `Cargo.toml` and `Cargo.lock` and the frontend package files.
+`packaging/build-deb.sh` checks that every version file agrees with `VERSION` (`--tag mainrelease|subrelease` bumps it first through `packaging/version.py`), runs the backend and end-to-end tests, builds the UI, builds with Tauri, verifies the package's version and copies only that `.deb` to `dist/`. The package bundles Python wheels so installing needs no network, installs `/usr/bin/zeus` and `/usr/bin/zeus-cli` (and `zeus-code` as an alias), and a desktop entry whose display name is Zeus-Agent while the command stays `zeus`. The post-install script creates the virtual environment under `/usr/lib/zeus/venv`. Versions are kept in sync across the backend config, the Tauri config, `Cargo.toml` and `Cargo.lock` and the frontend package files.
 
 ## 8. The multi-agent runtime the product is designed for
 

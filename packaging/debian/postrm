@@ -1,0 +1,27 @@
+#!/bin/sh
+# After Zeus-Agent is removed. Only `apt purge zeus` does anything here: it also removes the GGUF models Zeus-Agent downloaded into
+# ~/.local/share/zeus/models for each user (`apt remove` keeps them: they can be gigabytes). Only *.gguf and *.part files are deleted, as the user.
+set -e
+RES="${ZEUS_RES_DIR:-/usr/lib/zeus}"
+
+case "$1" in
+    purge)
+        rm -rf "$RES/venv" 2>/dev/null || true
+        command -v runuser >/dev/null 2>&1 || exit 0
+        getent passwd | while IFS=: read -r name _ uid _ _ home _; do
+            case "$uid" in ''|*[!0-9]*) continue ;; esac
+            if [ "$uid" -ne 0 ] && { [ "$uid" -lt 1000 ] || [ "$uid" -ge 65534 ]; }; then continue; fi
+            [ -d "$home/.local/share/zeus/models" ] || continue
+            [ -e "$home/.zeus/keep-data" ] && continue
+            runuser -u "$name" -- sh -c '
+                d="$1/.local/share/zeus/models"
+                [ -d "$d" ] && [ ! -L "$d" ] || exit 0
+                n=$(find "$d" -type f \( -name "*.gguf" -o -name "*.part" \) -print -delete | wc -l)
+                find "$d" -depth -type d -empty -delete 2>/dev/null || true
+                rmdir "$1/.local/share/zeus" 2>/dev/null || true
+                echo "zeus: removed $n downloaded model file(s) of $1"
+            ' sh "$home" </dev/null || echo "zeus: could not remove the downloaded models in $home" >&2
+        done
+        ;;
+esac
+exit 0

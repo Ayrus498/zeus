@@ -1,4 +1,4 @@
-import type { ChangeEntry, Execution, ModelInfo, ModelMeta, OllamaStatus, Project, Session, TreeNode, Mode, Policy, Metrics, Catalog, DownloadRow, Overview, AutoPlan, AutoPreview, MissionRow, ConvertFormats, ConvertResult, LibraryInfo, LibraryList, LibrarySearch, AboutInfo } from "./types";
+import type { ChangeEntry, Execution, ModelInfo, ModelMeta, OllamaStatus, Project, Session, TreeNode, Mode, Policy, Metrics, Catalog, DownloadRow, Overview, AutoPlan, AutoPreview, MissionRow, ConvertFormats, ConvertResult, LibraryInfo, LibraryList, LibrarySearch, AboutInfo, EngineId, EnginesInfo, HfSearch, ResetPlan, ResetReport, MemoryInfo, ContextInfo, CompactResult, ArenaOverview, ArenaFamily, ArenaHardware, ArenaFit, LlamaOverview, HfFiles, SavedState } from "./types";
 
 export const API = (import.meta.env.VITE_ZEUS_API as string | undefined) ?? "http://127.0.0.1:8765";
 export const WS = API.replace(/^http/, "ws");
@@ -26,7 +26,7 @@ async function convertFile(file: File): Promise<ConvertResult> {
   return r.json();
 }
 
-export interface Settings { home: string; ollama_url: string; default_model: string | null; default_num_ctx: number }
+export interface Settings { home: string; ollama_url: string; engine?: EngineId; default_model: string | null; default_num_ctx: number }
 export interface PermInfo { mode: Mode; custom: Record<string, Policy>; policy: Record<string, Policy> }
 
 export const api = {
@@ -52,8 +52,33 @@ export const api = {
   unloadModel: (model: string) => req<{ ok: boolean }>("/api/ollama/unload", "POST", { model }),
   openUrl: (url: string) => req<{ ok: boolean }>("/api/open-url", "POST", { url }),
   metrics: () => req<Metrics>("/api/metrics"),
-  models: () => req<ModelInfo[]>("/api/models"),
-  modelInfo: (name: string, num_ctx?: number) => req<ModelMeta>("/api/models/info" + q({ name, num_ctx })),
+  models: (engine?: EngineId) => req<ModelInfo[]>("/api/models" + (engine ? q({ engine }) : "")),
+  modelInfo: (name: string, num_ctx?: number, engine?: EngineId) => req<ModelMeta>("/api/models/info" + q({ name, num_ctx, engine })),
+  engines: () => req<EnginesInfo>("/api/engines"),
+  setEngine: (engine: EngineId, session_id?: number | null) => req<EnginesInfo>("/api/engine", "PUT", { engine, session_id: session_id ?? null }),
+  llama: () => req<LlamaOverview>("/api/llamacpp"),
+  llamaConfig: (patch: Record<string, unknown>) => req<LlamaOverview>("/api/llamacpp/config", "PUT", patch),
+  llamaRescan: () => req<LlamaOverview>("/api/llamacpp/rescan", "POST"),
+  llamaStart: (model: string) => req<{ starting: string }>("/api/llamacpp/server/start", "POST", { model }),
+  llamaStop: () => req<LlamaOverview>("/api/llamacpp/server/stop", "POST"),
+  llamaLog: (lines = 80) => req<{ log: string }>("/api/llamacpp/log" + q({ lines })),
+  hfFiles: (repo: string) => req<HfFiles>("/api/llamacpp/hf" + q({ repo })),
+  hfSearch: (query: string) => req<HfSearch>("/api/llamacpp/search" + q({ q: query })),
+  llamaDownload: (repo: string, file: string) => req<DownloadRow>("/api/llamacpp/download", "POST", { repo, file }),
+  llamaDelete: (model: string) => req<LlamaOverview & { deleted: { removed: string[]; bytes: number } }>("/api/llamacpp/models", "DELETE", { model }),
+  arena: (refresh = false, ctx = 8192) => req<ArenaOverview>("/api/arena" + q({ refresh: refresh ? "true" : undefined, ctx })),
+  arenaFamily: (family: string, ctx = 8192) => req<ArenaFamily>(`/api/arena/family/${encodeURIComponent(family).replace(/%2F/g, "/")}` + q({ ctx })),
+  arenaDetail: (repo: string, ctx = 8192) => req<{ hardware: ArenaHardware; fit: ArenaFit }>("/api/arena/detail" + q({ repo, ctx })),
+  memory: (pid: number) => req<MemoryInfo>(`/api/projects/${pid}/memory`),
+  putMemory: (pid: number, text: string) => req<MemoryInfo>(`/api/projects/${pid}/memory`, "PUT", { text }),
+  addMemoryNote: (pid: number, note: string) => req<MemoryInfo & { line: string; added: boolean }>(`/api/projects/${pid}/memory/note`, "POST", { note }),
+  context: (sid: number) => req<ContextInfo>(`/api/sessions/${sid}/context`),
+  compact: (sid: number) => req<CompactResult>(`/api/sessions/${sid}/compact`, "POST"),
+  resetSummary: (sid: number) => req<ContextInfo>(`/api/sessions/${sid}/summary`, "DELETE"),
+  resetPlan: () => req<ResetPlan>("/api/reset"),
+  reset: (items: string[], confirm: string) => req<ResetReport>("/api/reset", "POST", { items, confirm }),
+  openSession: (id: number) => req<{ ok: boolean }>(`/api/sessions/${id}/open`, "POST"),
+  savedState: () => req<SavedState>("/api/state"),
   projects: () => req<Project[]>("/api/projects"),
   addProject: (path: string) => req<Project>("/api/projects", "POST", { path }),
   createProject: (parent: string, name: string) => req<Project>("/api/projects/create", "POST", { parent, name }),
@@ -68,7 +93,7 @@ export const api = {
   getPerms: (id: number) => req<PermInfo>(`/api/projects/${id}/permissions`),
   setPerms: (id: number, mode: Mode, custom?: Record<string, Policy>) => req<PermInfo>(`/api/projects/${id}/permissions`, "PUT", { mode, custom }),
   sessions: (project_id?: number) => req<Session[]>("/api/sessions" + q({ project_id })),
-  createSession: (b: { project_id: number; model?: string | null; num_ctx?: number | null }) => req<Session>("/api/sessions", "POST", b),
+  createSession: (b: { project_id: number; model?: string | null; num_ctx?: number | null; engine?: EngineId | null }) => req<Session>("/api/sessions", "POST", b),
   patchSession: (id: number, b: Partial<Pick<Session, "title" | "model" | "num_ctx">>) => req<Session>(`/api/sessions/${id}`, "PATCH", b),
   deleteSession: (id: number) => req<{ ok: boolean }>(`/api/sessions/${id}`, "DELETE"),
   missions: (id: number) => req<MissionRow[]>(`/api/sessions/${id}/missions`),

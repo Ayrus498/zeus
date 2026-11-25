@@ -33,6 +33,33 @@ stays pinned to the bottom row; everything Zeus-Agent prints appears above it.
 
 ![The welcome screen: icon, session and device information, command hints and the input box](screenshots/cli-01-banner.png)
 
+## Commands in the desktop app
+
+Typing `/` in the prompt box opens a command menu (↑↓ to choose, Tab to complete, Enter to run, Esc to close). Commands run even without a model and while Zeus-Agent is working.
+Results appear as cards in the conversation (not saved with it); other commands open the matching window.
+
+| Command | Result |
+|---|---|
+| `/context` (`/ctx`) | Card with the context meter, messages sent vs kept, summary and memory in use |
+| `/compact` | Summarises older messages; card with before/after tokens and the summary; "Undo" button |
+| `/summary [reset]` | Shows the summary, or forgets it |
+| `/memory [show\|add <note>]` | Opens the project-memory editor; `show` prints it; `add` appends a note |
+| `/remember <note>` | Appends a note to project memory |
+| `/engine [ollama\|llamacpp\|help]` | Switches engine or opens the comparison |
+| `/llamacpp`, `/models`, `/best` | Open the llama.cpp window, the Models window, the benchmarks view |
+| `/permissions [mode]` | Shows or sets Read only / Approval / Trusted |
+| `/files`, `/changes`, `/terminal`, `/usage` | Show that panel |
+| `/reset` | Opens the Reset dialog: tick what to remove, type `RESET` |
+| `/new`, `/clear`, `/stop`, `/settings`, `/help` | New conversation, clear the screen (history is kept), stop, About, list commands |
+| `/think`, `/code` | Auto mode: force the reasoning or coding model for this prompt (sent as typed) |
+
+The context chip beside the attach button shows the same meter (Σ = summary in use, mem = project memory in use); click it for `/context`.
+
+## Starting and resuming
+
+`zeus --cli --continue` (or `-c`) resumes the conversation you had last, in the desktop app or in the terminal: same project, engine, model and context (read from `~/.zeus/state.json`).
+`zeus --cli --engine llamacpp` starts with llama.cpp.
+
 ## Slash commands
 
 Type `/` to open the live command menu (arrow keys and Tab).
@@ -42,6 +69,15 @@ Type `/` to open the live command menu (arrow keys and Tab).
 | Command | What it does |
 | --- | --- |
 | `/help` | List every command |
+| `/context` | How full the context window is (meter), what is summarised, what project memory is in use |
+| `/compact` | Summarise the older messages now to free context window |
+| `/summary` | Show the rolling summary of this conversation; `/summary reset` forgets it |
+| `/memory` | Show project memory; `/memory add <note>`, `/memory clear` |
+| `/remember` | Save one note to project memory: `/remember Tests run with pytest -q` |
+| `/reset` | Return to a fresh installation: shows what would be removed, asks you to type `RESET` (add `models` to include downloaded models) |
+| `/best` | Which model is best for coding, agentic coding, agents, chat, vision or documents (Arena votes) and whether it runs on this computer. `/best coding`, `/best agents all` (include models that do not fit) |
+| `/engine` | Choose Ollama or llama.cpp for this conversation, or get help choosing |
+| `/llamacpp` | llama.cpp menu: `llama-server` path and the programs found, model folders, **Download a model** (search Hugging Face; each file shows how it runs here), **Uninstall a model**, stop the server. Models Ollama downloaded are listed too (shared, read only) |
 | `/settings` | Menu: **Models**, **Ollama endpoint**, **Current model**, **Installed models**, context window, permissions, **About** |
 | `/ollama-model [name]` | Pick from your installed models, grouped by family; type to search |
 | `/ollama-ctx [size]` (aliases `/ollama-ctxt`, `/ctx`) | Context window: 8K to 128K, the model's maximum, or a custom size |

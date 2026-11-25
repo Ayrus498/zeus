@@ -20,16 +20,21 @@ from rich.markup import escape
 from rich.table import Table
 from rich.text import Text
 
-from .. import config
-from . import banner as bn
+from ..core import config
+from .commands import best as bst
+from .commands import llamamodels as lm
+from .commands import memory as mem
+from .commands import reset as rs
+from .ui import banner as bn
+from .commands import engines as en
 from .client import Api, ApiError, DEFAULT_PORT, start_backend, stop_backend
-from .fmt import clip, fmt_bytes, fmt_ctx, fmt_num, parse_ctx, short_path
-from .models import catalog_options, group_of, installed_options, norm
-from .cards import THEME, output_card, preview_text, user_card, clean_output
-from .render import Renderer, permission_panel
-from .chooser import Option, ask_text, choose, confirm
-from .ui import FullUI
-from .theme import DIM, ERR, OK, PURPLE, WARN
+from .ui.fmt import clip, fmt_bytes, fmt_ctx, fmt_num, parse_ctx, short_path
+from .commands.models import catalog_options, group_of, installed_options, norm
+from .ui.cards import THEME, output_card, preview_text, user_card, clean_output
+from .ui.render import Renderer, permission_panel
+from .ui.chooser import Option, ask_text, choose, confirm
+from .ui.screen import FullUI
+from .ui.theme import DIM, ERR, OK, PURPLE, WARN
 
 PERM_OPTIONS = [
     ("read_only", "Read only", "Zeus-Agent can read files but cannot change anything or run commands"),
@@ -43,6 +48,15 @@ COMMANDS: dict[str, tuple[tuple[str, ...], str]] = {
     "help": ((), "Show all commands"),
     "settings": ((), "Models, Ollama endpoint, current model, installed models, About"),
     "ollama-model": (("model",), "Choose the model from your installed Ollama models"),
+    "engine": (("engines",), "Choose the engine that runs the models: Ollama or llama.cpp (with a help screen)"),
+    "context": ((), "How full the context window is, what is summarised, what memory is in use"),
+    "compact": ((), "Summarise the older messages now to free context window"),
+    "summary": ((), "Show the rolling summary of this conversation (/summary reset forgets it)"),
+    "memory": (("mem",), "Project memory: notes every new conversation starts with (/memory add <note>)"),
+    "remember": ((), "Save one note to project memory:  /remember Tests run with pytest -q"),
+    "reset": ((), "Return Zeus-Agent to a fresh installation (shows what is removed, asks you to type RESET)"),
+    "best": (("benchmarks",), "Which model is best for coding, chat, vision or agents (Arena scores) and whether it runs on this computer"),
+    "llamacpp": (("llama",), "llama.cpp: server path, model folders, download a GGUF model, stop the server"),
     "ollama-ctx": (("ollama-ctxt", "ctx"), "Set the context window size"),
     "permissions": (("perm",), "Choose what Zeus-Agent is allowed to do"),
     "project": (("cd",), "Change the project folder (default: where you started zeus)"),
@@ -124,9 +138,15 @@ def copy_to_clipboard(text: str, output=None) -> str | None:
 
 class Cli:
     def __init__(self, api: Api, console: Console, cwd: Path, *, model: str | None = None, ctx: int | None = None,
-                 perm: str | None = None, resume: bool = False):
+                 perm: str | None = None, resume: bool = False, engine: str | None = None, explicit_path: bool = False):
         self.api, self.c, self.cwd = api, console, cwd
         self.opt_model, self.opt_ctx, self.opt_perm, self.opt_resume = model, ctx, perm, resume
+        self.opt_engine, self.explicit_path = engine, explicit_path
+        self.engine = "ollama"                   # what runs the models: "ollama" or "llamacpp"
+        self.engines: dict[str, dict] = {}       # status of both engines (from /api/engines)
+        self.engine_help: dict = {}
+        self.recommendation: dict = {}
+        self.resumed: dict | None = None         # set when --continue picked up a conversation from state.json
         self.project: dict | None = None
         self.session: dict | None = None
         self.model: str | None = None
@@ -148,38 +168,94 @@ class Cli:
     @property
     def snapshot(self) -> dict:
         return {"model": self.model, "ctx": self.ctx, "perm": self.perm, "project_path": self.project["path"] if self.project else str(self.cwd),
-                "ollama": self.ollama, "version": config.VERSION}
+                "ollama": self.ollama, "version": config.VERSION, "engine": self.engine, "engines": self.engines}
+
+    @property
+    def engine_ok(self) -> bool:
+        e = self.engines.get(self.engine)
+        return bool(e["available"]) if e else bool(self.ollama.get("connected"))
 
     async def refresh(self):
         self.ollama = await self.api.get("/api/ollama/status")
         try:
-            self.installed = await self.api.get("/api/models") if self.ollama.get("connected") else []
+            j = await self.api.get("/api/engines")
+            self.engines = {e["id"]: e for e in j["engines"]}
+            self.engine_help, self.recommendation = j.get("help", {}), j.get("recommendation", {})
+        except ApiError:
+            self.engines = {}
+        try:
+            self.installed = await self.api.get("/api/models", engine=self.engine) if self.engine_ok else []
         except ApiError:
             self.installed = []
 
     async def start(self):
         await self.api.get("/api/health")
         s = await self.api.get("/api/settings")
+        self.engine = en.engine_of(self.opt_engine or "") or en.engine_of(s.get("engine") or "") or "ollama"
+        await self.use_project(self.cwd, announce=False)
+        if self.opt_resume:
+            await self.resume()                  # may switch project, engine, model and context to where you left off
         await self.refresh()
         try:
             self.about = await self.api.get("/api/about")
         except ApiError:
             self.about = None
-        self.ctx = self.opt_ctx or int(s.get("default_num_ctx") or 16384)
-        names = {m["name"] for m in self.installed}
-        dm = self.opt_model or s.get("default_model")
-        if dm == "auto" or (dm and dm in names):
-            self.model = dm
-        else:
-            self.model = "auto" if any(not m["name"].lower().startswith(("nomic", "mxbai", "bge", "all-minilm")) for m in self.installed) else None
-        await self.use_project(self.cwd, announce=False)
+        if not self.resumed or not self.model:
+            self.ctx = self.opt_ctx or self.ctx_from(s)
+            self.model = self.pick_model(s)
+        if self.opt_ctx:
+            self.ctx = self.opt_ctx
+        if self.opt_model:
+            self.model = self.pick_model(s)
         if self.opt_perm:
             await self.set_perm(self.opt_perm, announce=False)
-        if self.opt_resume:
-            sess = await self.api.get("/api/sessions", project_id=self.project["id"])
-            if sess:
-                self.session = sess[0]
-                self.model, self.ctx = self.session.get("model") or self.model, self.session.get("num_ctx") or self.ctx
+
+    def ctx_from(self, s: dict) -> int:
+        return int(s.get("default_num_ctx") or 16384)
+
+    def pick_model(self, s: dict) -> str | None:
+        """The model to start with: the one asked for, else the one used last with this engine, else something sensible."""
+        names = {m["name"] for m in self.installed}
+        if self.engine == "llamacpp":
+            last = (self.engines.get("llamacpp") or {}).get("last_model")
+            want = self.opt_model or last
+            return want if want in names else (next(iter(sorted(names)), None))
+        dm = self.opt_model or s.get("default_model")
+        if dm == "auto" or (dm and dm in names):
+            return dm
+        return "auto" if any(not m["name"].lower().startswith(("nomic", "mxbai", "bge", "all-minilm")) for m in self.installed) else None
+
+    async def resume(self):
+        """--continue: pick up the conversation remembered in ~/.zeus/state.json (whichever client you used last), and fall back to
+        the latest conversation of this folder. With an explicit folder argument only that folder's latest conversation is considered."""
+        if not self.explicit_path:
+            try:
+                st = await self.api.get("/api/state")
+            except ApiError:
+                st = {}
+            r = st.get("resolved")
+            if r and r.get("project") and Path(r["project"]["path"]).is_dir():
+                if str(Path(r["project"]["path"])) != str(self.cwd):
+                    await self.use_project(Path(r["project"]["path"]), announce=False)
+                    os.chdir(self.cwd)
+                sess = r.get("session")
+                self.engine = en.engine_of(r.get("engine") or (sess or {}).get("engine") or "") or self.engine
+                if sess:
+                    self.session = sess
+                    self.model, self.ctx = sess.get("model") or r.get("model"), sess.get("num_ctx") or r.get("num_ctx") or self.ctx
+                else:
+                    self.model, self.ctx = r.get("model"), r.get("num_ctx") or self.ctx
+                self.resumed = {"client": (st.get("state") or {}).get("client"), "title": (sess or {}).get("title"), "path": r["project"]["path"]}
+                if sess:
+                    await self.api.post(f"/api/sessions/{sess['id']}/open")          # this client is now the one that last used it
+                return
+        sess = await self.api.get("/api/sessions", project_id=self.project["id"])
+        if sess:
+            self.session = sess[0]
+            self.engine = en.engine_of(self.session.get("engine") or "") or self.engine
+            self.model, self.ctx = self.session.get("model") or self.model, self.session.get("num_ctx") or self.ctx
+            self.resumed = {"client": None, "title": self.session.get("title"), "path": self.project["path"]}
+            await self.api.post(f"/api/sessions/{self.session['id']}/open")
 
     async def use_project(self, path: Path, announce: bool = True):
         if not path.is_dir():
@@ -193,14 +269,15 @@ class Cli:
 
     async def ensure_session(self) -> dict:
         if self.session is None:
-            self.session = await self.api.post("/api/sessions", {"project_id": self.project["id"], "model": self.model, "num_ctx": self.ctx})
+            self.session = await self.api.post("/api/sessions", {"project_id": self.project["id"], "model": self.model, "num_ctx": self.ctx, "engine": self.engine})
         return self.session
 
     async def set_model(self, name: str):
         self.model = name
         if self.session:
             self.session = await self.api.patch(f"/api/sessions/{self.session['id']}", {"model": name})
-        await self.api.put("/api/settings", {"default_model": name})
+        if self.engine == "ollama":
+            await self.api.put("/api/settings", {"default_model": name})          # (llama.cpp remembers its last model per engine itself)
         self.c.print(Text.assemble(("  ✓ ", OK), "model: ", (name, f"bold {PURPLE}")))
 
     async def set_ctx(self, n: int):
@@ -236,11 +313,12 @@ class Cli:
 
     def toolbar(self):
         m = self.model or "no model"
-        ok = self.ollama.get("connected")
+        ok = self.engine_ok
         label = next((l for k, l, _ in PERM_OPTIONS if k == self.perm), self.perm)
-        frags = [("fg:ansibrightblack", "  "), ("fg:#a78bfa bold", "⚡ "), ("", f"{m}"), ("fg:ansibrightblack", f" · ctx {fmt_ctx(self.ctx)} · "),
-                 ("", label), ("fg:ansibrightblack", f" · {short_path(self.project['path'] if self.project else self.cwd, 40)} · "),
-                 ("fg:ansigreen" if ok else "fg:ansired", "● ollama" if ok else "● ollama offline")]
+        name = en.LABEL.get(self.engine, self.engine)
+        frags = [("fg:ansibrightblack", "  "), ("fg:#a78bfa bold", "⚡ "), ("fg:ansibrightblack", f"{name} · "), ("", f"{m}"),
+                 ("fg:ansibrightblack", f" · ctx {fmt_ctx(self.ctx)} · "), ("", label), ("fg:ansibrightblack", f" · {short_path(self.project['path'] if self.project else self.cwd, 40)} · "),
+                 ("fg:ansigreen" if ok else "fg:ansired", f"● {name}" if ok else f"● {name} offline")]
         if self.working:
             frame = SPINNER[int(time.time() * 10) % len(SPINNER)]
             frags = [("fg:#a78bfa bold", f"  {frame} Thunderstorm is approaching…"), ("fg:ansibrightblack", "   Ctrl+C to stop"), ("fg:ansibrightblack", "  ·  "), *frags[2:]]
@@ -317,17 +395,34 @@ class Cli:
         self.c.print(t)
 
     async def cmd_ollama_model(self, arg):
+        """Choose the model for the current engine: Ollama's installed models, or the GGUF files llama.cpp can run."""
         await self.refresh()
-        if not self.ollama.get("connected"):
-            self.c.print(Text(f"  Ollama is not connected ({self.ollama.get('error', 'unknown error')}). Check /settings → Ollama endpoint.", style=ERR))
+        name = en.LABEL[self.engine]
+        if not self.engine_ok:
+            e = self.engines.get(self.engine) or {}
+            err = e.get("error") or self.ollama.get("error", "unknown error")
+            hint = "Check /settings → Ollama endpoint." if self.engine == "ollama" else "Run /engine → Help me choose for the install steps, then /llamacpp."
+            self.c.print(Text(f"  {name} is not available ({err}). {hint}", style=ERR))
             return
-        if arg:                                           # /ollama-model qwen3:8b
+        if arg:                                           # /model qwen3:8b
             names = [m["name"] for m in self.installed]
-            hit = arg if arg in names or arg == "auto" else next((n for n in names if n.startswith(arg)), None)
+            hit = arg if arg in names or (arg == "auto" and self.engine == "ollama") else next((n for n in names if n.startswith(arg)), None)
             if not hit:
-                self.c.print(Text(f"  '{arg}' is not installed. Run /ollama-model to pick, or /settings → Models → Download.", style=ERR))
+                where = "/settings → Models → Download" if self.engine == "ollama" else "/llamacpp → Download a model"
+                self.c.print(Text(f"  '{arg}' is not available in {name}. Run /model to pick, or {where}.", style=ERR))
                 return
             await self.set_model(hit)
+            return
+        if self.engine == "llamacpp":
+            if not self.installed:
+                self.c.print(Text("  No GGUF models found. Use /llamacpp to add a model folder or download one.", style=WARN))
+                return
+            opts = [Option(m["name"], m["name"], " · ".join(x for x in (fmt_bytes(m.get("size")), m.get("parameter_size"), m.get("quantization"),
+                                                                       f"{fmt_ctx(m['context_length'])} ctx" if m.get("context_length") else None,
+                                                                       "tools" if m.get("tools") else None) if x)) for m in self.installed if not m.get("embedding")]
+            v = await self._choose("Choose a model  (GGUF files llama.cpp can run)", opts, current=self.model, searchable=True)
+            if v:
+                await self.set_model(v)
             return
         ov = await self.api.get("/api/ollama/overview")
         opts = installed_options(self.installed, ov.get("loaded"))
@@ -337,6 +432,253 @@ class Cli:
         v = await self._choose("Choose a model  (installed in Ollama)", opts, current=self.model, searchable=True)
         if v:
             await self.set_model(v)
+
+    # ------------------------------------------------------------------ engines
+    async def cmd_engine(self, arg):
+        await self.refresh()
+        want = en.engine_of(arg) if arg else None
+        if arg and not want:
+            self.c.print(Text("  Use /engine ollama or /engine llamacpp (or just /engine to choose).", style=ERR))
+            return
+        while not want:
+            v = await self._choose("Engine  (what runs the models)", en.options(self.engines, self.recommendation.get("engine")), current=self.engine)
+            if v == "help":
+                self.c.print(en.help_screen(self.engine_help, self.recommendation, self.engine, self.engines))
+                continue
+            if not v:
+                return
+            want = v
+        await self.set_engine(want)
+
+    async def set_engine(self, name: str, announce: bool = True):
+        out = await self.api.put("/api/engine", {"engine": name, "session_id": self.session["id"] if self.session else None})
+        self.engine = name
+        self.engines = {e["id"]: e for e in out["engines"]}
+        self.recommendation = out.get("recommendation", {})
+        if self.session:
+            sess = next((x for x in await self.api.get("/api/sessions", project_id=self.project["id"]) if x["id"] == self.session["id"]), None)
+            if sess:
+                self.session = sess
+        await self.refresh()
+        self.model = (self.session or {}).get("model") or self.engines.get(name, {}).get("last_model") or self.pick_model({})
+        if self.session and self.model and self.session.get("model") != self.model:
+            self.session = await self.api.patch(f"/api/sessions/{self.session['id']}", {"model": self.model})
+        if announce:
+            self.c.print(Text.assemble(("  ✓ ", OK), "engine: ", (en.LABEL[name], f"bold {PURPLE}"), (f" · model: {self.model}" if self.model else "", DIM)))
+            if not self.engine_ok:
+                self.c.print(Text(f"  {en.LABEL[name]} is not available yet. Run /engine → Help me choose.", style=WARN))
+            elif not self.model:
+                self.c.print(Text("  No model yet. Run /model to choose one.", style=WARN))
+
+    async def cmd_reset(self, arg):
+        try:
+            plan = await self.api.get("/api/reset")
+        except Exception as e:  # noqa: BLE001
+            self.c.print(mem.error(f"Could not read what Zeus-Agent has saved: {e}"))
+            return
+        self.c.print(rs.plan_view(plan))
+        answer = await self._ask(f"Type {plan['confirm']} to remove the items marked ✓ (add `models` to include downloaded models); Enter cancels", default="")
+        ids, include_models = rs.parse_answer(answer or "", plan)
+        if ids is None:
+            self.c.print(Text("  Nothing was removed.", style=DIM))
+            return
+        try:
+            report = await self.api.post("/api/reset", {"confirm": plan["confirm"], "items": ids})
+        except Exception as e:  # noqa: BLE001
+            self.c.print(mem.error(f"Reset failed: {e}"))
+            return
+        self.c.print(rs.report_view(report))
+        self.c.print(Text("  Restart zeus --cli to begin again.", style=DIM))
+        await self.cmd_exit("")
+
+    async def cmd_context(self, arg):
+        if not self.session:
+            self.c.print(mem.error("Nothing sent yet: there is no conversation to measure."))
+            return
+        self.c.print(mem.context_view(await self.api.get(f"/api/sessions/{self.session['id']}/context")))
+
+    async def cmd_compact(self, arg):
+        if not self.session:
+            self.c.print(mem.error("Nothing sent yet: there is no conversation to summarise."))
+            return
+        self.c.print(Text("  Summarising the older messages…", style=DIM))
+        try:
+            r = await self.api.post(f"/api/sessions/{self.session['id']}/compact")
+        except Exception as e:  # noqa: BLE001
+            self.c.print(mem.error(f"Could not compact: {e}"))
+            return
+        self.c.print(mem.compact_result(r))
+
+    async def cmd_summary(self, arg):
+        if not self.session:
+            self.c.print(mem.error("Nothing sent yet."))
+            return
+        sid = self.session["id"]
+        if arg.strip() == "reset":
+            await self.api.req("DELETE", f"/api/sessions/{sid}/summary")
+            self.c.print(Text("  ✓ Summary forgotten: the whole conversation is sent to the model again.", style=OK))
+            return
+        c = await self.api.get(f"/api/sessions/{sid}/context")
+        if c.get("summary"):
+            self.c.print(mem.summary_view(c["summary"]["text"], c["summary"]["covers"]))
+        else:
+            self.c.print(Text(f"  No summary yet. The conversation is summarised at {c['trigger_percent']}% of the context window, or on request with /compact.", style=DIM))
+
+    async def cmd_memory(self, arg):
+        if not self.project:
+            return
+        pid = self.project["id"]
+        sub, _, rest = arg.strip().partition(" ")
+        if sub == "add":
+            return await self.cmd_remember(rest)
+        if sub == "clear":
+            if await self._confirm("Erase all project memory?"):
+                await self.api.put(f"/api/projects/{pid}/memory", {"text": ""})
+                self.c.print(Text("  ✓ Project memory cleared.", style=OK))
+            return
+        self.c.print(mem.memory_view(await self.api.get(f"/api/projects/{pid}/memory")))
+        self.c.print(Text("  /memory add <note> · /memory clear · or edit the file directly", style=DIM))
+
+    async def cmd_remember(self, arg):
+        if not self.project:
+            return
+        if not arg.strip():
+            self.c.print(mem.error("Write the note after the command, for example /remember Tests run with pytest -q"))
+            return
+        try:
+            r = await self.api.post(f"/api/projects/{self.project['id']}/memory/note", {"note": arg})
+        except Exception as e:  # noqa: BLE001
+            self.c.print(mem.error(str(e)))
+            return
+        self.c.print(Text.assemble(("  ✓ ", OK), ("saved to project memory" if r["added"] else "already in project memory", "bold"), (f"  {r['line'][2:]}", DIM)))
+
+    async def cmd_best(self, arg):
+        words = (arg or "").split()
+        everything = "all" in words
+        words = [w for w in words if w != "all"]
+        act = bst.activity_of(words[0]) if words else None
+        if words and not act:
+            self.c.print(Text("  Use /best coding, agentic, agents, chat, vision or documents (add `all` to include models that do not fit).", style=ERR))
+            return
+        try:
+            ov = await self.api.get("/api/arena", ctx=(self.session or {}).get("num_ctx") or 8192)
+        except Exception as e:  # noqa: BLE001
+            self.c.print(Text(f"  Could not read the model rankings: {e}", style=ERR))
+            return
+        if not act:
+            act = await self._choose("Best model for…", bst.options(ov), current="agentcode")
+            if not act:
+                return
+        self.c.print(bst.render(ov, act, only_fit=not everything))
+
+    async def cmd_llamacpp(self, arg):
+        """llama.cpp settings: where llama-server is, which folders hold models, download a model, stop the server."""
+        while True:
+            j = await self.api.get("/api/llamacpp")
+            st, cfg, srv = j["status"], j["config"], j["server"]
+            opts = [
+                Option("llama-server", "binary", (st.get("binary") or cfg.get("binary") or "not found") + (f" · {st['version']}" if st.get("version") else "")
+                       + ("  (found automatically)" if j.get("binary_auto") and st.get("binary") else "")),
+                Option("Found on this computer", "found", f"{len(j.get('found', []))} llama-server program{'' if len(j.get('found', [])) == 1 else 's'} · choose one or search again"),
+                Option("Model folders", "folders", f"{len(j['folders'])} folders · {lm.summary(j['models'])}"),
+                Option("Download a model", "download", "search Hugging Face; see how each file runs on this computer"),
+                Option("Uninstall a model", "uninstall", f"{len(lm.removable_options(j['models']))} can be deleted · Ollama's models are removed in Ollama"),
+                Option("Use llama.cpp as the engine", "use", "switch this conversation to llama.cpp"),
+                Option("Stop the server", "stop", f"loaded: {srv['model']}" if srv.get("running") else "nothing loaded"),
+            ]
+            v = await self._choose("llama.cpp", opts)
+            if not v:
+                return
+            try:
+                if v == "binary":
+                    t = await self._ask("Full path of llama-server (empty = find it automatically)", default=cfg.get("binary") or "")
+                    if t is not None:
+                        await self.api.put("/api/llamacpp/config", {"binary": t.strip()})
+                        self.c.print(Text("  ✓ saved", style=OK))
+                elif v == "found":
+                    await self.choose_llama_server(j)
+                elif v == "folders":
+                    t = await self._ask("Add a folder with .gguf files (Tab completes)", default=str(Path.home()) + os.sep, paths=True)
+                    if t:
+                        await self.api.put("/api/llamacpp/config", {"models_dirs": [*cfg.get("models_dirs", []), t.strip()]})
+                        self.c.print(Text("  ✓ folder added", style=OK))
+                elif v == "download":
+                    await self.download_gguf()
+                elif v == "uninstall":
+                    await self.uninstall_gguf(j)
+                elif v == "use":
+                    await self.set_engine("llamacpp")
+                    return
+                elif v == "stop":
+                    await self.api.post("/api/llamacpp/server/stop")
+                    self.c.print(Text("  ✓ server stopped", style=OK))
+            except ApiError as e:
+                self.c.print(Text(f"  {e}", style=ERR))
+
+    async def choose_llama_server(self, j: dict):
+        """Pick which llama-server to use from the programs found on this computer, go back to the automatic choice, or search again."""
+        if j.get("binary_problem"):
+            self.c.print(Text(f"  {j['binary_problem']}", style=WARN))
+        opts = [Option(f["path"], f["path"], " · ".join(x for x in (f.get("version"), ("GPU: " + ", ".join(f["devices"])) if f.get("gpu") else "CPU only", f"in {f['source']}",
+                                                                      "automatic choice" if f.get("auto") and j.get("binary_auto") else "") if x)) for f in j.get("found", [])]
+        opts += [Option("Use the automatic choice", "__auto", "prefers a build that can use your GPU, then the newest"), Option("Search the computer again", "__rescan", "after installing or building llama.cpp")]
+        v = await self._choose("llama-server programs", opts, current=(j["status"].get("binary") if not j.get("binary_auto") else "__auto"))
+        if not v:
+            return
+        if v == "__rescan":
+            r = await self.api.post("/api/llamacpp/rescan")
+            self.c.print(Text(f"  ✓ found {len(r.get('found', []))} llama-server program{'' if len(r.get('found', [])) == 1 else 's'}", style=OK))
+        else:
+            await self.api.put("/api/llamacpp/config", {"binary": "" if v == "__auto" else v})
+            self.c.print(Text("  ✓ saved", style=OK))
+
+    async def download_gguf(self):
+        """Search Hugging Face (or type owner/name), choose a repository, then a file: each file shows how it would run on this computer."""
+        text = await self._ask("Search Hugging Face for a GGUF model (e.g. qwen coder), or type owner/name  (Enter = most downloaded)", default="")
+        if text is None:
+            return
+        text = text.strip()
+        if lm.looks_like_repo(text):
+            repo = text
+        else:
+            try:
+                found = await self.api.get("/api/llamacpp/search", q=text)
+            except ApiError as e:
+                self.c.print(Text(f"  {e}", style=ERR))
+                return
+            if not found["results"]:
+                self.c.print(Text(f"  No GGUF models found for “{text}”.", style=WARN))
+                return
+            repo = await self._choose(f"GGUF models{' for ' + text if text else ''} (most downloaded first)", lm.search_options(found["results"]))
+            if not repo:
+                return
+        info = await self.api.get("/api/llamacpp/hf", repo=repo)
+        opts = lm.file_options(info)
+        if not opts:
+            self.c.print(Text("  No single-file GGUF models in that repository.", style=WARN))
+            return
+        hw = info.get("hardware") or {}
+        v = await self._choose(f"Files in {info['repo']}  ({hw.get('gpu') or 'no GPU'}, {hw.get('ram_gb', '?')} GB RAM)", opts, current=info.get("suggested"))
+        if not v:
+            return
+        await self.api.post("/api/llamacpp/download", {"repo": info["repo"], "file": v})
+        self.c.print(Text(f"  ⇣ downloading {v} in the background; it appears in /model when finished (watch it in /llamacpp).", style=DIM))
+
+    async def uninstall_gguf(self, j: dict):
+        """Delete a model Zeus-Agent downloaded (or one in a download cache). Models in your own folders and Ollama's are never deleted."""
+        opts = lm.removable_options(j["models"])
+        if not opts:
+            self.c.print(Text("  Nothing here can be deleted by Zeus-Agent. Models in your own folders are yours to remove, and Ollama's are removed in Ollama (ollama rm <name>).", style=DIM))
+            return
+        name = await self._choose("Uninstall which model?", opts)
+        if not name:
+            return
+        m = next(x for x in j["models"] if x["name"] == name)
+        files = "\n".join("    " + f for f in m["removable"]["files"])
+        if not await self._confirm(f"Delete {name} ({fmt_bytes(m['removable']['bytes'] or m['size'])})? This cannot be undone.\n{files}"):
+            return
+        r = await self.api.req("DELETE", "/api/llamacpp/models", json_body={"model": name})
+        self.c.print(Text(f"  ✓ {name} uninstalled, {fmt_bytes(r['deleted']['bytes'])} freed", style=OK))
 
     async def cmd_ollama_ctx(self, arg):
         if arg:
@@ -365,7 +707,7 @@ class Cli:
         if not self.model or self.model == "auto":
             return None
         try:
-            return (await self.api.get("/api/models/info", name=self.model)).get("context_length")
+            return (await self.api.get("/api/models/info", name=self.model, engine=self.engine)).get("context_length")
         except ApiError:
             return None
 
@@ -373,7 +715,7 @@ class Cli:
         if not self.model or self.model == "auto":
             return
         try:
-            w = ((await self.api.get("/api/models/info", name=self.model, num_ctx=self.ctx)).get("context_check") or {}).get("warning")
+            w = ((await self.api.get("/api/models/info", name=self.model, num_ctx=self.ctx, engine=self.engine)).get("context_check") or {}).get("warning")
         except ApiError:
             return
         if w:
@@ -429,6 +771,11 @@ class Cli:
         self.session = next(s for s in sess if s["id"] == v)
         self.model = self.session.get("model") or self.model
         self.ctx = self.session.get("num_ctx") or self.ctx
+        eng = en.engine_of(self.session.get("engine") or "")
+        if eng and eng != self.engine:                    # a conversation resumes on the engine it was started with
+            self.engine = eng
+            await self.refresh()
+        await self.api.post(f"/api/sessions/{v}/open")
         msgs = await self.api.get(f"/api/sessions/{v}/messages")
         for m in msgs[-6:]:
             who = "you" if m.get("role") == "user" else "zeus" if m.get("role") == "assistant" else None
@@ -468,6 +815,9 @@ class Cli:
         self.c.print(Text.assemble(ok(True), f" backend v{config.VERSION} on port {self.api.port}"))
         self.c.print(Text.assemble(ok(self.ollama.get("connected")), f" Ollama {self.ollama.get('version', '')} at {self.ollama.get('endpoint', '?')}"
                                    + ("" if self.ollama.get("connected") else f" – {self.ollama.get('error', '')}")))
+        ll = self.engines.get("llamacpp") or {}
+        self.c.print(Text.assemble(ok(ll.get("available")), f" llama.cpp {ll.get('version') or ''} ({ll.get('models', 0)} GGUF models)" + ("" if ll.get("available") else f" – {ll.get('error', 'not found')}")))
+        self.c.print(Text.assemble(("  ", ""), ("engine in use: ", DIM), (en.LABEL.get(self.engine, self.engine), "bold")))
         self.c.print(Text.assemble(ok(bool(self.installed)), f" {len(self.installed)} models installed"))
         if self.model and self.model != "auto":
             have = self.model in {m["name"] for m in self.installed}
@@ -484,7 +834,9 @@ class Cli:
         while True:
             await self.refresh()
             opts = [
-                Option("Models", "models", f"{len(self.installed)} installed · download, switch, unload, uninstall"),
+                Option("Engine", "engine", f"{en.LABEL.get(self.engine, self.engine)} · switch to Ollama or llama.cpp, with help"),
+                Option("llama.cpp", "llama", "server path, model folders, download a GGUF model"),
+                Option("Models", "models", f"{len(self.installed)} available · download, switch, unload, uninstall"),
                 Option("Ollama endpoint", "endpoint", ("connected" if self.ollama.get("connected") else "not connected") + f" · {self.ollama.get('endpoint', '')}"),
                 Option("Current model", "current", self.model or "none"),
                 Option("Installed models", "installed", f"{len(self.installed)} models"),
@@ -495,7 +847,7 @@ class Cli:
             v = await self._choose("Settings", opts)
             if not v:
                 return
-            fn = {"models": self.set_models, "endpoint": self.set_endpoint, "current": self.show_current, "installed": self.manage_installed,
+            fn = {"engine": lambda: self.cmd_engine(""), "llama": lambda: self.cmd_llamacpp(""), "models": self.set_models, "endpoint": self.set_endpoint, "current": self.show_current, "installed": self.manage_installed,
                   "ctx": lambda: self.cmd_ollama_ctx(""), "perm": lambda: self.cmd_permissions(""), "about": lambda: self.cmd_about("")}[v]
             await fn()
 
@@ -842,10 +1194,26 @@ class Cli:
                          placeholder="Ask Zeus-Agent to build, fix or explain code…  (type / for commands)")
         real_console, self.c = self.c, self.ui.make_console()      # from here on everything is printed into the message window
         self.show_banner()
-        if not self.ollama.get("connected"):
-            self.c.print(Text(f"  Ollama is not connected ({self.ollama.get('error', 'unknown')}). Start it with `ollama serve`, or set the endpoint in /settings.", style=WARN))
+        if self.resumed:
+            src = {"gui": "the desktop app", "cli": "the terminal"}.get(self.resumed.get("client") or "", None)
+            self.c.print(Text.assemble(("  ↻ ", f"bold {PURPLE}"), "resumed ", (f"'{clip(self.resumed.get('title') or 'your last conversation', 50)}'", "bold"),
+                                       (f" from {src}" if src else "", DIM), (f" · {en.LABEL.get(self.engine, self.engine)} · {self.model or 'no model'}", DIM)))
+            if self.session:
+                try:
+                    for m in (await self.api.get(f"/api/sessions/{self.session['id']}/messages"))[-4:]:
+                        who = "you" if m.get("role") == "user" else "zeus" if m.get("role") == "assistant" else None
+                        if who and m.get("content"):
+                            self.c.print(Text.assemble((f"    {who}: ", f"bold {PURPLE}" if who == "zeus" else "bold"), (clip(m["content"], 150), DIM)))
+                except ApiError:
+                    pass
+        if not self.engine_ok:
+            e = self.engines.get(self.engine) or {}
+            if self.engine == "llamacpp":
+                self.c.print(Text(f"  llama.cpp is not available ({e.get('error') or 'llama-server not found'}). Run /engine → Help me choose, or /engine ollama.", style=WARN))
+            else:
+                self.c.print(Text(f"  Ollama is not connected ({self.ollama.get('error', 'unknown')}). Start it with `ollama serve`, or set the endpoint in /settings.", style=WARN))
         elif not self.installed:
-            self.c.print(Text("  No models installed yet. Open /settings → Models → Download a model.", style=WARN))
+            self.c.print(Text("  No models available yet. " + ("Open /settings → Models → Download a model." if self.engine == "ollama" else "Use /llamacpp to add a model folder or download a model."), style=WARN))
         app_task = asyncio.create_task(self.ui.run())
         work_task = asyncio.create_task(self.worker())
         await asyncio.wait({app_task, work_task}, return_when=asyncio.FIRST_COMPLETED)
@@ -867,12 +1235,13 @@ class Cli:
 
 # ---------------------------------------------------------------------- entry point
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="zeus --cli", description="Zeus-Agent in the terminal: a local coding agent powered by Ollama.")
+    p = argparse.ArgumentParser(prog="zeus --cli", description="Zeus-Agent in the terminal: a local coding agent powered by Ollama or llama.cpp.")
     p.add_argument("path", nargs="?", help="project folder (default: the current directory)")
-    p.add_argument("-m", "--model", help="Ollama model name, or 'auto'")
+    p.add_argument("-m", "--model", help="model name (Ollama: 'qwen3:8b' or 'auto'; llama.cpp: the GGUF file name without .gguf)")
+    p.add_argument("--engine", choices=["ollama", "llamacpp"], help="what runs the models (default: the one you used last)")
     p.add_argument("--ctx", type=parse_ctx_arg, help="context window, e.g. 32768 or 32k")
     p.add_argument("--permission-mode", choices=["read_only", "approval", "trusted"], help="what Zeus-Agent may do")
-    p.add_argument("-c", "--continue", dest="resume", action="store_true", help="continue the latest conversation in this project")
+    p.add_argument("-c", "--continue", dest="resume", action="store_true", help="resume the conversation you had last, in the desktop app or here (project, engine, model and context included); with a folder: its latest conversation")
     p.add_argument("-p", "--print", dest="print_prompt", metavar="PROMPT", help="run one prompt non-interactively, print the answer and exit")
     p.add_argument("--port", type=int, default=DEFAULT_PORT, help=argparse.SUPPRESS)
     p.add_argument("-V", "--version", action="version", version=f"Zeus-Agent {config.VERSION}")
@@ -898,7 +1267,8 @@ async def amain(args) -> int:
             return 1
         api = Api(args.port)
         cwd = resolve_dir(args.path) if args.path else Path.cwd()
-        cli = Cli(api, console, cwd, model=args.model, ctx=args.ctx, perm=args.permission_mode, resume=args.resume)
+        cli = Cli(api, console, cwd, model=args.model, ctx=args.ctx, perm=args.permission_mode, resume=args.resume, engine=args.engine,
+                  explicit_path=bool(args.path))
         try:
             await cli.start()
         except ApiError as e:

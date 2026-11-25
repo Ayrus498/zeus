@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate backend/app/cli/logo.py from the app icon (needs Pillow, build-time only).
+"""Regenerate backend/app/cli/ui/logo.py from the app icon (needs Pillow, build-time only).
 
 The icon is resampled to SIZE x SIZE pixels and stored as hex colours, so the terminal UI can draw it with
 half-block characters (two pixels per character cell) without any image library at runtime.
@@ -11,7 +11,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src-tauri" / "icons" / "source.png"
-OUT = ROOT / "backend" / "app" / "cli" / "logo.py"
+OUT = ROOT / "backend" / "app" / "cli" / "ui" / "logo.py"
 SIZE = int(sys.argv[1]) if len(sys.argv) > 1 else 26
 
 im = Image.open(SRC).convert("RGBA")

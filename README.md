@@ -112,9 +112,17 @@ frontend/node_modules/.bin/tauri dev
 Just want to use it? Download the ready-made package from the [website](https://zeus-agent.web.app/) or the [latest release](https://github.com/Ayrus498/zeus/releases/latest). To build it yourself:
 
 ```bash
-packaging/build-deb.sh        # runs backend tests, builds the UI, runs `tauri build --bundles deb`
-sudo apt install ./dist/zeus_0.2.1_amd64.deb
+packaging/build-deb.sh                      # builds the stored version (file VERSION): backend tests, end-to-end tests, UI, `tauri build --bundles deb`
+packaging/build-deb.sh --tag subrelease     # x.y.z -> x.y.(z+1), then builds it
+packaging/build-deb.sh --tag mainrelease    # x.y.z -> x.(y+1).0, then builds it
+sudo apt install ./dist/zeus_$(cat VERSION)_amd64.deb
 ```
+
+**Releases and versions.** `VERSION` is the only place a version is decided. `--tag` bumps it (a main release raises the middle number and resets the last, a sub release raises the last) and
+writes it into every file that carries it: the app (`backend/app/core/config.py`), Cargo, Tauri and npm (and their lock files). From then on every plain build produces exactly that version, and
+`dist/` holds only that one package with its `.sha256` and `RELEASE.json` (version, git tag name such as `v02_03`, checksum, commit). Packages of other versions, and an earlier build of the same version, are moved to `dist/archive/` (a rebuild never overwrites a package you may have installed or shared; `packaging/publish.py`) and are not
+built again. A build refuses to start if any file disagrees with `VERSION`, and a failed `--tag` build restores the previous version. The script prints the tag to create (`git tag v02_03`); pushing
+it is left to you. `packaging/version.py show|check|sync` inspects or repairs the version files, and `packaging/build_deb.sh` is the same script under the underscore name.
 
 Building needs network once (Rust crates, npm packages, and the Python wheels, which `packaging/make-wheelhouse.sh`
 downloads into `packaging/wheelhouse/`). The resulting package is self-contained: its `postinst` creates a virtualenv in
@@ -128,7 +136,8 @@ Ollama and models are not bundled. Install them separately.
 zeus                       # opens the app and gives the terminal back (it runs in its own session, so closing the terminal does not close it)
 zeus --foreground          # keep the app attached to this terminal (its output is otherwise appended to ~/.local/share/zeus/zeus.log)
 zeus --cli                 # the terminal UI instead of the window
-sudo apt remove zeus       # your data stays in ~/.local/share/zeus (delete it to remove sessions/history)
+sudo apt remove zeus       # stops Zeus-Agent and removes what it kept in every user's home folder: settings, history, logs and the desktop window's data (a project's own .zeus folder and your project files are never touched). Models Zeus-Agent downloaded are kept, and the message says where
+sudo apt purge zeus        # the same, and the downloaded models too
 ```
 
 ## Missions (attach a `.md` file)
@@ -160,13 +169,62 @@ Install note: the `.deb` bundles MarkItDown with its PDF/Word/PowerPoint/Excel e
 ~100 MB and ~500 MB on disk after install), mostly `onnxruntime`/`magika` (file-type detection), `numpy`/`pandas` (Excel) and `pillow`. To slim it down, edit the
 `markitdown[...]` line in `backend/requirements.txt` (for example drop `xlsx,xls` to avoid pandas/numpy) before building. From source: `pip install -r backend/requirements.txt`.
 
+## Uninstalling cleanly
+
+`sudo apt remove zeus` closes the app (and the llama-server it started) and then removes, **for every user who used it**, the folders `~/.zeus` and `~/.local/share/zeus` (database, settings, history, logs),
+and the desktop window's own storage (`~/.local/share`, `~/.cache`, `~/.config` of `ai.zeus.desktop`). Nothing else is touched: not your project files and **not the `.zeus` folder inside your projects**
+(their saved conversations and project memory belong to the project and come back when you open it again), not Ollama or its models, not models in your own folders. The cleanup runs as each user (never as root), deletes only files it knows, and never follows a symlink. The models Zeus-Agent downloaded are kept by `remove`
+(they can be gigabytes) and removed by `sudo apt purge zeus`. To keep your data when uninstalling, create an empty file `~/.zeus/keep-data` first. Upgrades and `apt install --reinstall` never remove anything.
+If Zeus-Agent was already removed by an older version, `cd backend && .venv/bin/python -m app.maintenance.cleanup --dry-run` (from a source checkout) lists what is left and, without `--dry-run`, removes it.
+
+## Starting over: reset to a fresh installation
+
+**Settings → Reset Zeus-Agent…** (or `/reset`, in the app and in the terminal) shows exactly what Zeus-Agent has saved and removes only what you tick, after you type `RESET`:
+conversations, projects and settings (the database), the `.zeus` history and memory folder of each project, `~/.zeus/settings.json` and `state.json`, logs and terminal history, and
+(not ticked by default, they can be large) the GGUF models Zeus-Agent downloaded itself. It never touches your own project files, Ollama and its models, models in folders you keep, or the
+installed program (`sudo apt remove zeus`). It only deletes files it knows by name, never follows a symlink, and refuses requests that come from a web page. Afterwards the app starts as on a first run.
+
+## Memory: project notes and long conversations
+
+- **Project memory** (`<project>/.zeus/memory.md`) is a short Markdown file of lasting facts: the stack, conventions, the test command, your preferences. Every turn of
+  every conversation in the project starts with it, so a new session is no longer a blank slate. Edit it in the desktop app (`/memory`, or Settings → Project memory),
+  by hand, or say "remember that tests run with pytest -q": the agent calls its `remember` tool, which asks for your approval like any other change. It stays on your
+  computer, is never committed, is size-limited and is given to the model as background notes that never override your request or the permission rules.
+- **Rolling summary.** The full transcript is always kept. When what would be sent to the model reaches 75% of the context window, the older part is summarised by the
+  same model (goal, decisions, files, state, next steps, preferences) and only that summary plus the newest messages are sent. Later summaries fold in the previous one.
+  `/compact` does it now, `/summary` shows it, `/summary reset` undoes it, `/context` and the meter beside the prompt box show how full the window is.
+- **Commands in the prompt box.** Type `/` in the desktop app: a menu lists every command (↑↓ choose, Tab completes, Enter runs). Commands either open the matching part of the
+  interface (`/memory`, `/models`, `/best`, `/engine`, `/llamacpp`, `/changes`…) or show their result in the conversation (`/context`, `/compact`, `/help`…).
+
+## Which model for which job (Models window → "Best for your hardware")
+
+Zeus-Agent reads your GPU and RAM and ranks open models for **coding, agentic coding, agents, chat and reasoning, vision and documents** using
+[Arena](https://arena.ai)'s blind human votes (CC BY 4.0), as compiled by [FreeLLMArena](https://freellmarena.com). Each model gets a verdict for *your* computer
+(runs on the GPU, GPU plus RAM, CPU only, too large), an estimated speed, a table of every quantization (file size, where it runs, quality loss), the
+matching `ollama pull` command and links to Hugging Face and GGUF files for llama.cpp. A family's page in the Models window also shows its Arena score and rank.
+In the terminal: `/best`, `/best coding`, `/best agents all`. A snapshot ships with the app; **Refresh** fetches the newest rankings (one plain request to
+freellmarena.com, nothing about you is sent). Scores say which answers people prefer, not that a model passes a test suite; speeds are estimates (about ±30%).
+Not affiliated with Arena or FreeLLMArena.
+
+## Engines: Ollama or llama.cpp
+
+**Download, uninstall and Ollama's models.** The llama.cpp window's *Download* tab lists the most downloaded GGUF models on Hugging Face, searches as you type (only the typed text is sent), shows how each file would run on your computer and suggests one; *Models* shows where each model came from and lets you uninstall what Zeus-Agent downloaded or what sits in Hugging Face's / llama.cpp's cache (never your own folders). The models you already downloaded with **Ollama** appear there too, as `ollama/<name>`: llama.cpp reads Ollama's model file in place (no copy, no second download, Ollama untouched; remove them with `ollama rm`). In the terminal: `/llamacpp`.
+
+llama.cpp: Zeus-Agent finds `llama-server` by itself (PATH, your home folder, /opt, /usr/local; real llama.cpp installs only, never Ollama's runner), prefers the build that can use your GPU, and the llama.cpp window (Engine & folders → Found on this computer, or `/llamacpp` in the terminal) lets you pick another or search again.
+
+The **Engine** dropdown (before the model dropdown) switches between Ollama and llama.cpp. **Help me choose…** compares them and suggests one for your machine.
+llama.cpp runs GGUF files through `llama-server`; **llama.cpp settings…** sets the `llama-server` path and model folders, tunes GPU layers, context, KV cache and
+flash attention per model, downloads GGUF files from Hugging Face and shows the server log. Each conversation keeps its own engine and model. In the terminal use
+`/engine`, `/llamacpp` and `zeus --cli --engine llamacpp`; `zeus --cli --continue` resumes the conversation you had in the desktop app, engine and model included.
+
 ## Where your data lives
 
 | Location | Contents |
 |---|---|
 | `<project>/.zeus/sessions/<id>.json` | One file per conversation: messages, tool calls, model, context size, token counts |
 | `<project>/.zeus/project.json`, `README.md`, `.gitignore` | Project info; `.gitignore` contains `*` so history is **never committed** by accident |
-| `~/.zeus/settings.json` | Ollama endpoint, default model/context, the list of known projects |
+| `~/.zeus/settings.json` | Ollama endpoint, default engine/model/context, llama.cpp settings, the list of known projects |
+| `~/.zeus/state.json` | Where you were: project, conversation, engine, model, context and permission mode, written by the desktop app and by `zeus --cli`. `zeus --cli --continue` resumes it |
 | `~/.local/share/zeus/zeus.db` | Live SQLite store (fast queries); the `.zeus` files are the durable copy it is rebuilt from |
 
 On startup Zeus-Agent restores any projects, settings and sessions that the database lacks; adding or opening a project
@@ -196,18 +254,18 @@ file/command), not to a whole category.
 ```bash
 cd backend && .venv/bin/python -m pytest      # permissions, path safety, tools, runner, agent loop, API
 cd frontend && npm test && npm run build      # unit tests + typecheck + production bundle
-python3 scripts/e2e_demo.py --parent /tmp/zeus-demo --name zeus-notes   # REAL-model demo (needs running backend + Ollama)
+python3 scripts/manual/real_model_demo.py --parent /tmp/zeus-demo --name zeus-notes   # REAL-model demo (needs running backend + Ollama)
 ```
 
 ## Repository layout
 
 ```
-backend/      FastAPI backend (agent, tools, permissions, providers, sessions, terminal, metrics) + tests
+backend/      FastAPI backend and terminal app, organised by feature: core, system, modelconnectors, modelhub, toolchain, agents, memory, workspace, documents, maintenance, mcp, api, cli (+ tests that mirror them)
 frontend/     React + TypeScript + Tailwind UI (feature folders under src/features)
 src-tauri/    Tauri 2 desktop shell (spawns/stops the backend) and app icons
-packaging/    build-deb.sh, make-wheelhouse.sh, Debian postinst/prerm
-scripts/      run-backend.sh (dev) and e2e_demo.py (real-model demo)
-docs/         ARCHITECTURE.md, COMMANDS.md (zeus --cli reference), agentic/ (requirements, design, development, testing and agent orchestration), screenshots
+packaging/    build-deb.sh (build_deb.sh), version.py, make-wheelhouse.sh, Debian postinst/prerm
+scripts/      e2e/ (end-to-end suite), manual/ (one-off real-model and browser checks), data/ (data updaters), run-backend.sh (dev)
+docs/         ARCHITECTURE.md, STRUCTURE.md (the map and the layering rules), COMMANDS.md (zeus --cli reference), agentic/ (requirements, design, development, testing and agent orchestration), screenshots
 ```
 
 ## Roadmap

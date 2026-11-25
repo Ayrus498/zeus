@@ -5,6 +5,11 @@ import { Timeline } from "../features/chat/Timeline";
 import { PromptInput } from "../features/chat/PromptInput";
 import { PermissionModeSelector } from "../features/permissions/PermissionModeSelector";
 import { ModelSelector } from "../features/models/ModelSelector";
+import { EngineSelector } from "../features/engines/EngineSelector";
+import { ResetDialog } from "../features/maintenance/ResetDialog";
+import { MemoryDialog } from "../features/memory/MemoryDialog";
+import { EngineHelp } from "../features/engines/EngineHelp";
+import { LlamaWindow } from "../features/engines/LlamaWindow";
 import { SettingsDialog } from "../features/models/SettingsDialog";
 import { UsagePanel } from "../features/models/UsagePanel";
 import { ModelsWindow } from "../features/models/ModelsWindow";
@@ -26,7 +31,9 @@ const TABS: Array<[RightTab, string, typeof Files]> = [["files", "Files", Files]
 
 export function AppLayout() {
   const { timeline, rightTab, setRightTab, openFile, changes, backendUp, ollama, project } = useApp();
-  const { overview, refreshOverview, modelsOpen, setModelsOpen } = useApp();
+  const { overview, refreshOverview, modelsOpen, setModelsOpen, engines, engine, setLlamaOpen, setEngineHelpOpen } = useApp();
+  const eng = engine();
+  const llamaInfo = engines?.engines.find((e) => e.id === "llamacpp");
   const activeDownloads = overview?.downloads.filter((d) => d.status === "queued" || d.status === "running").length ?? 0;
   // Poll Ollama state while the Models window is open or a download is running, so progress and errors are always current.
   useEffect(() => {
@@ -50,9 +57,12 @@ export function AppLayout() {
         <div className="shrink-0" style={{ width: left }}><ProjectsSidebar /></div>
         <Resizer side="left" label="Resize left pane" width={left} min={LEFT_MIN} max={leftMax} onChange={setLeftW} />
         <main className="flex min-w-0 flex-1 flex-col">
-          <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2"><ModelSelector /><PermissionModeSelector /></header>
+          <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2"><div className="flex flex-wrap items-center gap-3"><EngineSelector /><ModelSelector /></div><PermissionModeSelector /></header>
           {!backendUp && <div className="bg-danger/15 px-4 py-2 text-xs text-danger">Cannot reach the Zeus-Agent backend. Retrying…</div>}
-          {backendUp && ollama && !ollama.connected && <div className="bg-warn/10 px-4 py-2 text-xs text-warn">Ollama is not reachable at {ollama.endpoint}. Start it with <span className="font-mono">ollama serve</span> or change the endpoint in Settings. <button className="cursor-pointer underline" onClick={() => setModelsOpen(true)}>Open the setup guide</button></div>}
+          {backendUp && eng === "ollama" && ollama && !ollama.connected && <div className="bg-warn/10 px-4 py-2 text-xs text-warn">Ollama is not reachable at {ollama.endpoint}. Start it with <span className="font-mono">ollama serve</span> or change the endpoint in Settings. <button className="cursor-pointer underline" onClick={() => setModelsOpen(true)}>Open the setup guide</button></div>}
+          {backendUp && eng === "llamacpp" && llamaInfo && !llamaInfo.available && (
+            <div className="bg-warn/10 px-4 py-2 text-xs text-warn" data-testid="llama-missing-banner">llama-server (llama.cpp) was not found. <button className="cursor-pointer underline" onClick={() => setLlamaOpen(true)}>Set it up</button>
+              {" · "}<button className="cursor-pointer underline" onClick={() => setEngineHelpOpen(true)}>Help me choose an engine</button></div>)}
           {backendUp && !project && <div className="px-4 py-3 text-sm text-muted">Open an existing folder or create a new project from the sidebar to get started.</div>}
           <div className="min-h-0 flex-1 overflow-auto"><Timeline items={timeline} /></div>
           <PromptInput />
@@ -70,7 +80,7 @@ export function AppLayout() {
           {openFile && <div className="min-h-0 flex-1"><FileViewer /></div>}
         </section>
       </div>
-      <StatusBar /><SettingsDialog /><ModelsWindow /><ToastHost />
+      <StatusBar /><SettingsDialog /><ModelsWindow /><LlamaWindow /><EngineHelp /><MemoryDialog /><ResetDialog /><ToastHost />
     </div>
   );
 }

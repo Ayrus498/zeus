@@ -2,16 +2,27 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.main import create_app
-from app.database.db import Database
-from app.permissions.manager import PermissionManager
-from app.terminal.runner import Runner
-from app.tools.engine import ToolContext, ToolEngine
+from app.core.database import Database
+from app.toolchain.permissions import PermissionManager
+from app.toolchain.runner import Runner
+from app.toolchain.engine import ToolContext, ToolEngine
 
 
 @pytest.fixture(autouse=True)
 def _isolated_zeus_home(tmp_path_factory, monkeypatch):
     """Never let tests touch the real ~/.zeus."""
     monkeypatch.setenv("ZEUS_HOME", str(tmp_path_factory.mktemp("zeushome")))
+
+
+@pytest.fixture(autouse=True)
+def _no_real_llama_cpp(monkeypatch):
+    """Tests must not find (or run) a llama-server, or list models, that happen to be installed on the developer's machine."""
+    from app.modelconnectors.llamacpp import finder as llamafind
+    from app.modelconnectors.llamacpp.provider import LlamaCppProvider
+    from app.modelconnectors.llamacpp import ollama_models as ollamastore
+    monkeypatch.setattr(llamafind, "discover", lambda *a, **k: [])
+    monkeypatch.setattr(LlamaCppProvider, "_standard", lambda self: [])
+    monkeypatch.setattr(ollamastore, "store_dirs", lambda *a, **k: [])                 # nor the Ollama models stored on the developer's machine
 
 
 @pytest.fixture

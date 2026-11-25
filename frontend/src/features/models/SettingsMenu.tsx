@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Boxes, Info, Link2, Settings, Sparkles, Package } from "lucide-react";
+import { BookMarked, Boxes, Cpu, RotateCcw, Info, Layers, Link2, Settings, Sparkles, Package } from "lucide-react";
 import { useApp } from "../../stores/app";
 import { cn } from "../../lib/utils";
 import type { SettingsView } from "../../services/types";
 
 /** Settings button with a drop-up menu: Models, Ollama endpoint, current model, installed models, About. */
 export function SettingsMenu() {
-  const { ollama, models, session, overview, setModelsOpen, openSettings } = useApp();
+  const { ollama, models, session, overview, setModelsOpen, openSettings, engines, engine, setLlamaOpen, setEngineHelpOpen, setMemoryOpen, setResetOpen, project, ctxInfo } = useApp();
+  const eng = engine();
+  const llama = engines?.engines.find((e) => e.id === "llamacpp");
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const downloading = overview?.downloads.filter((d) => d.status === "queued" || d.status === "running").length ?? 0;
@@ -30,11 +32,15 @@ export function SettingsMenu() {
 
   const go = (fn: () => void) => () => { setOpen(false); fn(); };
   const view = (v: SettingsView) => go(() => openSettings(v));
-  const items: { id: string; icon: typeof Boxes; label: string; hint: string; run: () => void; badge?: string }[] = [
-    { id: "models", icon: Boxes, label: "Models", hint: "Browse, download, uninstall, Auto mode", run: go(() => setModelsOpen(true)), badge: downloading ? `${downloading} downloading` : undefined },
+  const items: { id: string; icon: typeof Boxes; label: string; hint: string; run: () => void; badge?: string; danger?: boolean }[] = [
+    { id: "engine", icon: Layers, label: "Engine", hint: `${eng === "llamacpp" ? "llama.cpp" : "Ollama"} · switch, or get help choosing`, run: go(() => setEngineHelpOpen(true)) },
+    { id: "memory", icon: BookMarked, label: "Project memory", hint: project ? (ctxInfo?.memory.exists ? `${ctxInfo.memory.bytes.toLocaleString()} bytes saved · notes every new conversation starts with` : "Notes every new conversation starts with") : "Open a project first", run: go(() => setMemoryOpen(true)) },
+    { id: "llama", icon: Cpu, label: "llama.cpp", hint: llama ? (llama.available ? `llama-server ${llama.version ?? ""} · ${llama.models} GGUF model${llama.models === 1 ? "" : "s"}` : "llama-server not found · set up") : "Server path, model folders, downloads", run: go(() => setLlamaOpen(true)) },
+    { id: "models", icon: Boxes, label: "Models", hint: "Ollama library: browse, download, uninstall, Auto mode", run: go(() => setModelsOpen(true)), badge: downloading ? `${downloading} downloading` : undefined },
     { id: "endpoint", icon: Link2, label: "Ollama endpoint", hint: ollama?.connected ? `Connected · Ollama ${ollama.version ?? ""}` : "Not connected", run: view("endpoint") },
     { id: "model", icon: Sparkles, label: "Current model", hint: session?.model ?? "No session open", run: view("model") },
-    { id: "installed", icon: Package, label: "Installed models", hint: `${models.length} installed`, run: view("installed") },
+    { id: "installed", icon: Package, label: "Installed models", hint: `${models.length} ${eng === "llamacpp" ? "GGUF models" : "installed"}`, run: view("installed") },
+    { id: "reset", icon: RotateCcw, label: "Reset Zeus-Agent…", hint: "Clean everything and start as a fresh installation", run: go(() => setResetOpen(true)), danger: true },
     { id: "about", icon: Info, label: "About Zeus-Agent", hint: "Version, device and memory", run: view("about") },
   ];
   return (
@@ -45,8 +51,8 @@ export function SettingsMenu() {
           {items.map((it) => (
             <button key={it.id} type="button" role="menuitem" data-testid={`settings-item-${it.id}`} onClick={it.run}
               className="flex w-full cursor-pointer items-center gap-2.5 border-b border-border/60 px-3 py-2 text-left outline-none last:border-b-0 hover:bg-surface-2 focus-visible:bg-surface-2">
-              <it.icon size={15} className="shrink-0 text-accent" />
-              <span className="min-w-0 flex-1"><span className="block text-sm">{it.label}</span>
+              <it.icon size={15} className={cn("shrink-0", it.danger ? "text-danger" : "text-accent")} />
+              <span className="min-w-0 flex-1"><span className={cn("block text-sm", it.danger && "text-danger")}>{it.label}</span>
                 <span className="block truncate text-[10px] text-muted">{it.hint}</span></span>
               {it.badge && <span className="rounded bg-accent px-1.5 text-[10px] text-accent-foreground">{it.badge}</span>}
             </button>))}

@@ -48,9 +48,9 @@ flowchart TD
 | A4 | Frontend Engineer | `frontend/src/**` | the desktop UI |
 | A5 | CLI Engineer | `backend/app/cli/**`, `packaging/zeus-cli` | the `zeus --cli` terminal app |
 | A6 | Desktop and Packaging Engineer | `src-tauri/**`, `packaging/**` | window shell, launcher, `.deb` |
-| A7 | QA Engineer | `backend/tests/**`, `frontend/src/__tests__/**`, `scripts/e2e_*` | tests and the test report |
-| A8 | Security Reviewer | read-only review of `permissions/`, `tools/`, `api/` | security findings |
-| A9 | Model Evaluator | `scripts/e2e_demo.py`, model notes in `DEVELOPMENT_STATUS.md` | real-model results |
+| A7 | QA Engineer | `backend/tests/**`, `frontend/src/__tests__/**`, `scripts/e2e/`, `scripts/manual/` | tests and the test report |
+| A8 | Security Reviewer | read-only review of `toolchain/`, `maintenance/`, `api/` | security findings |
+| A9 | Model Evaluator | `scripts/manual/real_model_demo.py`, model notes in `DEVELOPMENT_STATUS.md` | real-model results |
 | A10 | Docs and Release Engineer | `README.md`, `docs/**`, `RELEASE_NOTES.md`, screenshots, versions | docs, release notes, the release |
 
 ## One work item, end to end

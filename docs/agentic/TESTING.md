@@ -26,20 +26,23 @@ flowchart BT
 | Unit | pure logic: permissions, path rules, parsers, routers, formatters, the scroll controller, the detach decision | `backend/tests`, `frontend/src/__tests__`, Rust `mod tests` |
 | Integration | REST and WebSocket behaviour with a real SQLite database and a scripted model | `test_api.py`, `test_agent.py`, `test_mission.py` |
 | Terminal app | the real screen, driven through a pseudo-terminal and a screen emulator, with real Ollama models | `test_cli.py` and the pty method in §5 |
-| Browser | the real UI in Chromium against a real backend and model | `scripts/e2e_scroll_check.py`, `scripts/e2e_models_library.py` and the method in §6 |
+| Browser | the real UI in Chromium against a real backend and model | `scripts/manual/scroll_check.py`, `scripts/manual/models_library_check.py` and the method in §6 |
+| End to end (build gate) | the real built UI in Chromium and the real terminal app in a pty, against a fake Ollama and the fake llama-server; includes the GUI-to-CLI hand-over through `state.json` | `scripts/e2e/` (run by `packaging/build-deb.sh`) |
 | Launcher | the real release binary under a pseudo-terminal and a virtual display | method in §7 |
-| Model behaviour | what real local models do with the agent's prompts and tools | `scripts/e2e_demo.py`, §8 |
-| Package | what is inside the `.deb` | `dpkg-deb` checks in §9 |
+| Model behaviour | what real local models do with the agent's prompts and tools | `scripts/manual/real_model_demo.py`, §8 |
+| Package | what is inside the `.deb`, and what its install/removal scripts do (run for real with stand-ins for getent/runuser and real processes: `test_maintainer_scripts.py`, `test_cleanup.py`) | `dpkg-deb` checks in §9 |
 
-## 3. Suites and counts (as of 2026-11-22)
+## 3. Suites and counts (as of 2026-11-25)
 
 | Suite | Command | Count |
 |---|---|---|
-| Backend (pytest) | `cd backend && .venv/bin/python -m pytest -q` | **282** in 16 files |
-| Frontend (vitest) | `cd frontend && npx vitest run` | **48** in 3 files |
+| Backend (pytest) | `cd backend && .venv/bin/python -m pytest -q` | **615** in 31 files |
+| Frontend (vitest) | `cd frontend && npx vitest run` | **64** in 5 files |
 | Shell (cargo) | `cd src-tauri && cargo test --lib` | **1** |
 | Frontend types | `cd frontend && npx tsc --noEmit` | must report nothing |
 | Frontend build | `cd frontend && npx vite build` | must succeed |
+
+Backend tests live in `backend/tests/<package>/`, mirroring `backend/app` (`packaging/` holds the install-script and version tests); shared helpers stay at the top (`conftest.py`, `paths.py`, `gguf_util.py`, `fixtures/`). `test_architecture.py` checks the layering rules of [STRUCTURE.md](../STRUCTURE.md), that every router is mounted and that tests sit in the right folder; `modelconnectors/test_connector_contract.py` checks that every engine keeps the connector contract.
 
 Backend files: `test_convert` 38, `test_cli` 34, `test_auto_router` 28, `test_mission` 24, `test_permissions` 23, `test_rescue` 20,
 `test_models_library` 20, `test_tools` 18, `test_library` 10, `test_api` 16, `test_agent` 14, `test_zeusdir` 11, `test_modelprefs` 11, `test_model_details` 8,
@@ -72,12 +75,12 @@ Screenshots for the docs are rendered from the emulated screen to HTML and captu
 
 **Scroll following (FR-16).**
 * Unit: `stickScroll.test.ts` (8 tests) covers following at the bottom, the reader scrolling up before the scroll event is delivered, a long stream after the reader moved away, resuming at the bottom, partial scrolls, shrinking content, `jump()` and cleanup.
-* Real browser: `scripts/e2e_scroll_check.py` sends a prompt for a long answer, scrolls up with the mouse wheel while text arrives, samples the scroll position for 5 s, and checks that it held, that "Jump to latest" appeared and that it returns to the end.
+* Real browser: `scripts/manual/scroll_check.py` sends a prompt for a long answer, scrolls up with the mouse wheel while text arrives, samples the scroll position for 5 s, and checks that it held, that "Jump to latest" appeared and that it returns to the end.
 * Reproduce on the previous build: serve the previous commit's `frontend` on another port (for example with `git archive HEAD frontend`) and run the same script; it must show the defect (position climbing back to the end, no button).
 
 Result recorded on 2026-11-22 with `qwen3.5:4b`: previous build, position moved from 1185 to 1913 px by itself; new build, position stayed at 7 px for the full 5 s while the content grew from 2331 to 3312 px; the button appeared and returned to the end.
 
-**Models window and the Ollama library (FR-03a).** `scripts/e2e_models_library.py` opens Settings, Models, checks the library group, searches for a model that is only in the public library (`ornith`), opens it, checks the description, the `ollama pull` command and the version table, and presses Download with the request intercepted so nothing is pulled. It needs internet access to ollama.com.
+**Models window and the Ollama library (FR-03a).** `scripts/manual/models_library_check.py` opens Settings, Models, checks the library group, searches for a model that is only in the public library (`ornith`), opens it, checks the description, the `ollama pull` command and the version table, and presses Download with the request intercepted so nothing is pulled. It needs internet access to ollama.com.
 
 How to run it safely: start a throw-away backend (`ZEUS_HOME=… ZEUS_DATA_DIR=… .venv/bin/python -m app` from `backend/`), start `npm run dev`, add one project through `POST /api/projects`, run the script, then stop those processes by pid.
 
@@ -99,7 +102,7 @@ Recorded on 2026-11-22: all of the above passed (returned in 0.04 s; own session
 ## 8. Real-model behaviour (A9)
 
 Run when a change affects prompts, tools, parsing or the agent loop.
-* **Cases** are short, specific prompts with an observable result, for example "run the swap.out and print the output" (must execute `./swap.out`) and "show me what is inside swap.out" (must read it); "create a FastAPI notes app" with approvals auto-answered (`scripts/e2e_demo.py`).
+* **Cases** are short, specific prompts with an observable result, for example "run the swap.out and print the output" (must execute `./swap.out`) and "show me what is inside swap.out" (must read it); "create a FastAPI notes app" with approvals auto-answered (`scripts/manual/real_model_demo.py`).
 * **Record** the model, the prompt, what it did and the pass rate over at least 3 runs.
 * **Models:** the owner's installed models; `qwen3-coder:30b` completes the notes application, `qwen2.5-coder:7b` needs the fallbacks and may not converge on large tasks (see `DEVELOPMENT_STATUS.md`).
 * **Rule:** a prompt change needs a failing case before and a passing case after.
@@ -108,7 +111,7 @@ Run when a change affects prompts, tools, parsing or the agent loop.
 
 * `dpkg-deb -f dist/zeus_<v>_amd64.deb Version Package` shows the version.
 * `dpkg-deb -c` lists `/usr/bin/zeus`, `/usr/bin/zeus-cli`, `/usr/bin/zeus-code` and the desktop entry.
-* Extract and grep the shipped code for the new behaviour (for example `fold_all` in `cli/ui.py`, the run-means-run rule in `agent/prompts.py`).
+* Extract and grep the shipped code for the new behaviour (for example `fold_all` in `cli/ui/screen.py`, the run-means-run rule in `agents/prompts.py`).
 * The desktop entry shows `Name=Zeus-Agent` and `Exec=zeus`.
 * Record the SHA-256 in the release notes.
 * Not verified in development: installing with `apt` (needs `sudo`) and launching the window against the installed package.
@@ -144,3 +147,15 @@ Not verified: <list>
 | G4 Review | review notes attached; security findings closed when triggered |
 | G5 Test | everything in G3 on the final tree, plus the layer-specific evidence from §5 to §8 |
 | Release | §9 package checks |
+
+## 10. The end-to-end suite (`scripts/e2e/`)
+
+`backend/.venv/bin/python scripts/e2e/run.py` runs 26 ordered cases (16 GUI, 9 CLI and a last, destructive GUI case that resets the stack) on one isolated stack: a fake Ollama (`fake_ollama.py`), the backend tests' fake `llama-server`, generated GGUF files, a temp project and the frontend built against the stack's port. GUI cases use Playwright/Chromium; CLI cases use a pseudo-terminal (`terminal.py`). The GUI cases create a conversation on llama.cpp and the CLI cases resume it with `--continue`, then a new Ollama conversation made in the terminal must appear as the saved state (`/api/state`).
+
+| Option | Meaning |
+|---|---|
+| `--layer gui\|cli` | one side only (CLI resume cases skip without the GUI cases) |
+| `--keep`, `--headed`, `--fail-fast`, `--out DIR` | keep logs, watch the browser, stop at the first failure, report folder (default `e2e-report/`) |
+| `ZEUS_E2E=skip` | bypass the suite and print that it was not run (for machines without a browser) |
+
+Reports: `report.md`, `report.json`, `junit.xml`, plus a screenshot, the terminal screen and the backend log for every failure. Exit code 0 passed, 1 a case failed, 2 the suite could not run. `packaging/build-deb.sh` runs it after the backend tests and stops the build on a non-zero exit (reports in `dist/e2e-report/`). The agent definition `.claude/agents/e2e-tester.md` runs it and triages failures. Setup: `pip install -r backend/requirements-dev.txt` and `playwright install chromium` (Playwright is pinned to the version whose Chromium is cached).

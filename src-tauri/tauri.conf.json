@@ -62,7 +62,8 @@
           "/usr/bin/zeus-code": "../packaging/zeus-code"
         },
         "postInstallScript": "../packaging/debian/postinst",
-        "preRemoveScript": "../packaging/debian/prerm"
+        "preRemoveScript": "../packaging/debian/prerm",
+        "postRemoveScript": "../packaging/debian/postrm"
       }
     }
   }

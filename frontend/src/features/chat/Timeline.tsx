@@ -2,6 +2,7 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Target, FilePlus, FileEdit, FileSearch, FolderOpen, GitBranch, ArrowDown, Loader2, Search, Terminal, Trash2, X, Zap } from "lucide-react";
 import type { TimelineItem } from "../../services/types";
 import { cn } from "../../lib/utils";
+import { LocalCard } from "../commands/LocalCard";
 import { Markdown } from "./Markdown";
 import { useApp } from "../../stores/app";
 import { ApprovalCard } from "../permissions/ApprovalCard";
@@ -121,6 +122,7 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
         if (it.kind === "mission") return <MissionCard key={`m${it.mid ?? i}`} item={it} />;
         if (it.kind === "tool") return <ToolCard key={i} item={it} />;
         if (it.kind === "command") return <CommandCard key={i} item={it} />;
+        if (it.kind === "local") return <LocalCard key={i} item={it} />;
         return <div key={i} className={cn("flex items-start gap-2 rounded-md px-3 py-2 text-xs", it.level === "error" ? "bg-danger/15 text-danger" : "bg-surface text-muted")}>
           {it.level === "error" && <AlertTriangle size={14} className="mt-0.5 shrink-0" />}{it.text}</div>;
       })}

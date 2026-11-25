@@ -32,7 +32,9 @@ function NewProjectDialog({ open, onClose }: { open: boolean; onClose: () => voi
 }
 
 export function ProjectsSidebar() {
-  const { projects, project, sessions, session, selectProject, addProjectFromPicker, removeProject, newSession, selectSession, renameSession, deleteSession, ollama } = useApp();
+  const { projects, project, sessions, session, selectProject, addProjectFromPicker, removeProject, newSession, selectSession, renameSession, deleteSession, ollama, engines, engine } = useApp();
+  const llama = engine() === "llamacpp" ? engines?.engines.find((e) => e.id === "llamacpp") : undefined;
+  const engineOk = llama ? llama.available : !!ollama?.connected;
   const [creating, setCreating] = useState(false);
   const [confirmReq, setConfirmReq] = useState<ConfirmRequest | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
@@ -41,7 +43,7 @@ export function ProjectsSidebar() {
     <aside className="flex h-full w-full flex-col border-r border-border bg-surface">
       <div className="flex items-center gap-2 px-4 pb-2 pt-3"><Zap className="text-accent" size={20} fill="currentColor" />
         <div><div className="text-sm font-semibold tracking-wide">Zeus-Agent</div>
-          <div className="flex items-center gap-1 text-[11px] text-muted"><span className={cn("h-1.5 w-1.5 rounded-full", ollama?.connected ? "bg-ok" : "bg-danger")} />{ollama?.connected ? "Ollama connected" : "Ollama offline"}</div></div></div>
+          <div className="flex items-center gap-1 text-[11px] text-muted"><span className={cn("h-1.5 w-1.5 rounded-full", engineOk ? "bg-ok" : "bg-danger")} />{llama ? (llama.available ? "llama.cpp ready" : "llama.cpp not found") : ollama?.connected ? "Ollama connected" : "Ollama offline"}</div></div></div>
       <div className="px-3 pb-2"><Button className="w-full" onClick={() => void newSession()} disabled={!project}><Plus size={15} /> New session</Button></div>
 
       <div className="flex items-center justify-between px-4 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted">Projects

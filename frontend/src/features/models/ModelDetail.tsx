@@ -12,6 +12,7 @@ import { fmtBytes } from "../../lib/utils";
 import { parseSizeGb } from "../../lib/modelFit";
 import type { Catalog, LibraryInfo, ModelInfo, Overview } from "../../services/types";
 import type { Item } from "../../lib/modelGroups";
+import { ArenaFamilySection } from "../benchmarks/ArenaPanel";
 import { ACTIVE, Chip, FIT, norm, TagRow, UninstallButton } from "./ModelParts";
 
 /** Installed model row used inside a detail view: size info plus Unload / Use. */
@@ -175,6 +176,7 @@ function LibraryDetail({ item, ov }: { item: Extract<Item, { kind: "library" }>;
         </div>
         <p className="mt-1 text-[11px] text-muted">Or download a version below, then press <b>Use</b> next to it to chat with it in the current project.</p>
       </section>
+      <ArenaFamilySection family={e.name} />
       <LiveDetails family={e.name} ov={ov} hideSummary={!!e.description} />
       {item.installed.length > 0 && (
         <section>
@@ -227,6 +229,7 @@ export function ModelDetail({ item, ov, catalog }: { item: Item; ov: Overview; c
           <div className="mb-1 text-xs font-medium text-muted">Installed on this machine <span className="font-mono text-[10px]">({item.installed.length})</span></div>
           <div className="space-y-1.5">{item.installed.map((i) => <InstalledRow key={i.name} m={i} ov={ov} notChat={m.fit === "no"} />)}</div>
         </section>)}
+      <ArenaFamilySection family={m.name} />
       <LiveDetails family={m.name} />
       <div className="text-[11px]"><ExternalLink href={m.url}>{`ollama.com/library/${m.name}`}</ExternalLink></div>
     </div>

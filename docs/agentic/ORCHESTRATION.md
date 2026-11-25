@@ -51,7 +51,7 @@ Small fixes may collapse stages (for example Requirements and Design into one no
 | G1 Requirements | A1 | every requirement has an id, a testable acceptance criterion and an owner agent |
 | G2 Design | A2 (+ A8 for security-relevant changes) | files, interfaces, data changes and risks are named; no requirement lacks a home |
 | G3 Build | the implementing agent | `tsc --noEmit`, `vite build`, backend `pytest`, `vitest` and (shell changes) `cargo build` succeed |
-| G4 Review | another agent | diff reviewed against the requirements; security review done when `permissions/`, `tools/`, `api/`, network or persistence changed |
+| G4 Review | another agent | diff reviewed against the requirements; security review done when `toolchain/`, `maintenance/`, `api/`, network or persistence changed |
 | G5 Test | A7 (+ A9) | the full suites pass; new behaviour has a test that fails without the change; real-model or browser evidence attached where the change is user-visible |
 | G6 Docs | A10 | README, docs, status table and release notes match the behaviour and the screenshots are current |
 | Owner approval | A0 asks the owner | commit, push, tag, publish and any public change |
@@ -105,7 +105,7 @@ Agents run in parallel only when their file sets do not overlap.
 | Terminal app | `backend/app/cli/**`, `packaging/zeus-cli`, `packaging/zeus-code` | A5 | A3 |
 | Frontend | `frontend/src/**` | A4 | A3 |
 | Shell and packaging | `src-tauri/**`, `packaging/**` | A6 | A3, A5 |
-| Tests | `backend/tests/**`, `frontend/src/__tests__/**`, `scripts/e2e_*.py` | A7 | all |
+| Tests | `backend/tests/**`, `frontend/src/__tests__/**`, `scripts/manual/*.py` | A7 | all |
 | Docs | `README.md`, `docs/**`, `RELEASE_NOTES.md`, `DEVELOPMENT_STATUS.md` | A10 | all |
 
 Rules:

@@ -7,9 +7,13 @@ import { fmtBytes, fmtCtx } from "../../lib/utils";
 const PRESETS = [8192, 16384, 32768, 65536];
 
 export function ModelSelector() {
-  const { models, session, modelMeta, setModel, setCtx, ollama, activeModel } = useApp();
-  const isAuto = session?.model === "auto";
-  const missing = !!session?.model && !isAuto && models.length > 0 && !models.some((m) => m.name === session.model);
+  const { models, session, modelMeta, setModel, setCtx, ollama, activeModel, engines, engine, setLlamaOpen } = useApp();
+  const eng = engine();
+  const pending = useApp((s) => s.pendingModel);
+  const chosen = session?.model ?? (pending && pending.engine === engine() ? pending.name : "");
+  const available = engines ? (engines.engines.find((e) => e.id === eng)?.available ?? false) : eng === "ollama" ? !!ollama?.connected : false;
+  const isAuto = session?.model === "auto" && eng === "ollama";
+  const missing = !!session?.model && session.model !== "auto" && models.length > 0 && !models.some((m) => m.name === session.model);
   const max = modelMeta?.context_length ?? null;
   const [custom, setCustom] = useState(false);
   useEffect(() => setCustom(false), [session?.id]);
@@ -19,12 +23,14 @@ export function ModelSelector() {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Cpu size={14} className="text-accent" />
-      <Select aria-label="Model" value={session?.model ?? ""} disabled={!ollama?.connected} onChange={(e) => void setModel(e.target.value)}>
-        {!session?.model && <option value="">Select model…</option>}
-        <option value="auto">✨ Auto — picks a model per prompt</option>
-        {missing && <option value={session!.model!}>{session!.model} (not installed)</option>}
-        {models.map((m) => <option key={m.name} value={m.name}>{m.name} · {fmtBytes(m.size)}</option>)}
+      <Select aria-label="Model" value={chosen} disabled={!available} onChange={(e) => void setModel(e.target.value)}>
+        {!chosen && <option value="">{eng === "llamacpp" && models.length === 0 ? "No GGUF models yet" : "Select model…"}</option>}
+        {eng === "ollama" && <option value="auto">✨ Auto — picks a model per prompt</option>}
+        {missing && <option value={session!.model!}>{session!.model} ({eng === "llamacpp" ? "file not found" : "not installed"})</option>}
+        {models.filter((m) => !m.embedding).map((m) => <option key={m.name} value={m.name}>{m.name} · {fmtBytes(m.size)}{eng === "llamacpp" && m.quantization ? ` · ${m.quantization}` : ""}</option>)}
       </Select>
+      {eng === "llamacpp" && available && models.length === 0 && (
+        <button type="button" onClick={() => setLlamaOpen(true)} data-testid="add-gguf" className="cursor-pointer text-xs text-accent hover:underline">Add or download a model</button>)}
       {isAuto && (
         <span className="flex max-w-[260px] items-center gap-1 truncate rounded-md bg-accent/15 px-2 py-1 text-[11px] text-accent" data-testid="auto-active"
           title="Auto mode: Zeus-Agent picks a coding or a reasoning model for each prompt from your installed models. Type /think or /code at the start of a prompt to force one. See Settings → Models for details.">

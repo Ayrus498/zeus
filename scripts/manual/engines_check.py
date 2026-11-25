@@ -1,0 +1,58 @@
+import json, sys, time
+from playwright.sync_api import sync_playwright
+SP = sys.argv[1]
+with sync_playwright() as p:
+    b = p.chromium.launch(); pg = b.new_page(viewport={"width": 1500, "height": 950}); pg.set_default_timeout(30000)
+    errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.goto("http://localhost:1420"); pg.wait_for_selector("[data-testid=engine-selector]"); pg.wait_for_timeout(2500)
+    def pick(label_aria, text):
+        pg.get_by_role("button", name=label_aria).first.click(); pg.wait_for_timeout(200)
+        pg.get_by_role("option", name=text).first.click(); pg.wait_for_timeout(400)
+    eng = pg.get_by_role("button", name="Engine").first.inner_text()
+    mdl = pg.get_by_role("button", name="Model").first.inner_text()
+    print("engine dropdown:", repr(eng), "| model dropdown:", repr(mdl))
+    pg.screenshot(path=f"{SP}/eng_1_main.png")
+    # open the dropdown to see the options
+    pg.get_by_role("button", name="Engine").first.click(); pg.wait_for_timeout(200)
+    print("engine options:", [o.strip() for o in pg.get_by_role("option").all_inner_texts()])
+    pg.screenshot(path=f"{SP}/eng_2_dropdown.png")
+    pg.get_by_role("option", name="Help me choose").first.click(); pg.wait_for_selector("[data-testid=engine-help]")
+    print("help rows:", pg.locator("[data-testid=engine-help] tbody tr").count(), "| recommendation:", pg.inner_text("[data-testid=engine-recommendation]")[:150].replace("\n", " "))
+    pg.screenshot(path=f"{SP}/eng_3_help.png")
+    pg.get_by_role("button", name="Close", exact=True).first.click(); pg.wait_for_timeout(300)
+    # llama.cpp window
+    pick("Engine", "llama.cpp settings"); pg.wait_for_selector("[data-testid=llama-window]"); pg.wait_for_timeout(2000)
+    print("window title status:", pg.inner_text("[data-testid=llama-window] header").replace("\n", " ")[:120])
+    rows = pg.locator("[data-testid^='llama-model-']").all_inner_texts()
+    print("models listed:", [r.split("\n")[0] for r in rows])
+    pg.screenshot(path=f"{SP}/eng_4_models.png")
+    q = pg.locator("[data-testid='llama-model-Qwen3-1.7B-Q8_0']")
+    q.get_by_title("Settings for this model").click(); pg.wait_for_selector("[data-testid=llama-model-settings]")
+    pg.get_by_label("GPU layers").last.fill("12"); pg.get_by_role("button", name="Save").last.click(); pg.wait_for_timeout(800)
+    cfg = json.loads(__import__("urllib.request").request.urlopen("http://127.0.0.1:8799/api/llamacpp").read())["config"]
+    print("per-model settings saved:", cfg["models"])
+    q.get_by_title("Settings for this model").click()
+    pg.get_by_role("button", name="Load").first.click() if False else None
+    q.get_by_role("button", name="Load").click(); pg.wait_for_selector("[data-testid='llama-model-Qwen3-1.7B-Q8_0'] >> text=loaded", timeout=90000)
+    print("loaded chip shown after Load")
+    pg.get_by_test_id("llama-tab-server").click(); pg.wait_for_timeout(1500)
+    print("server status:", pg.inner_text("[data-testid=llama-server-status]")[:140].replace("\n", " "))
+    print("log has command line:", "-ngl" in pg.inner_text("[data-testid=llama-log]") and "12" in pg.inner_text("[data-testid=llama-log]"))
+    pg.screenshot(path=f"{SP}/eng_5_server.png")
+    pg.get_by_test_id("llama-tab-download").click(); pg.get_by_label("Hugging Face repository").fill("Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF"); pg.get_by_role("button", name="List files").click()
+    pg.wait_for_selector("[data-testid=hf-files]"); pg.wait_for_timeout(500)
+    print("HF files:", [r.replace("\n", " ")[:70] for r in pg.locator("[data-testid=hf-files] .py-1\\.5").all_inner_texts()][:4])
+    pg.screenshot(path=f"{SP}/eng_6_download.png")
+    pg.get_by_test_id("llama-tab-engine").click(); pg.wait_for_timeout(500)
+    print("binary status:", pg.inner_text("[data-testid=llama-binary-status]")[:100])
+    pg.screenshot(path=f"{SP}/eng_7_engine_tab.png")
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(400)
+    # switch to Ollama and back
+    pick("Engine", "Ollama"); pg.wait_for_timeout(1500)
+    print("after switching to Ollama -> engine:", pg.get_by_role("button", name="Engine").first.inner_text(), "| model:", pg.get_by_role("button", name="Model").first.inner_text()[:50])
+    pg.screenshot(path=f"{SP}/eng_8_ollama.png")
+    pick("Engine", "llama.cpp"); pg.wait_for_timeout(1500)
+    print("back to llama.cpp -> engine:", pg.get_by_role("button", name="Engine").first.inner_text(), "| model:", pg.get_by_role("button", name="Model").first.inner_text()[:60])
+    pg.screenshot(path=f"{SP}/eng_9_back.png")
+    print("page errors:", errs)
+    b.close()
